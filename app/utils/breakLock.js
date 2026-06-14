@@ -1,9 +1,9 @@
-// Cmd+Tab lockdown for strict-mode breaks (macOS only).
+// Cmd+Tab lockdown during breaks (macOS only).
 //
-// Wraps the native `strict-lock` event-tap addon. During a strict break the app
-// swallows Cmd+Tab so the user cannot switch away or drop a fullscreen break out
-// of its Space. The tap needs Accessibility permission; when it is missing we
-// prompt once and log loudly rather than silently failing open.
+// Wraps the native `strict-lock` event-tap addon. While a break is showing the
+// app swallows Cmd+Tab so the user cannot switch away or drop a fullscreen
+// break out of its Space. The tap needs Accessibility permission; when it is
+// missing we prompt once and log loudly rather than silently failing open.
 
 import { createRequire } from 'module'
 import { systemPreferences } from 'electron'
@@ -20,17 +20,17 @@ if (process.platform === 'darwin') {
   }
 }
 
-// Engage the lockdown for an active strict break. Returns true only when the tap
-// is actually swallowing keys. Returns false (and logs) on non-macOS, a missing
+// Engage the lockdown for an active break. Returns true only when the tap is
+// actually swallowing keys. Returns false (and logs) on non-macOS, a missing
 // module, or when Accessibility permission has not been granted.
-export function engageStrictLock () {
+export function engageBreakLock () {
   if (!native) return false
 
   if (!native.isInstalled()) {
     const installed = native.install()
     if (!installed) {
       // Not trusted for Accessibility — prompt so the user can grant it. The
-      // lockdown only takes effect on the next strict break after granting.
+      // lockdown only takes effect on the next break after granting.
       systemPreferences.isTrustedAccessibilityClient(true)
       log.error('Stretchly: Cmd+Tab lockdown could not engage — grant Accessibility permission in System Settings > Privacy & Security > Accessibility')
       return false
@@ -42,8 +42,8 @@ export function engageStrictLock () {
   return true
 }
 
-// Release the lockdown when a strict break ends. Safe to call unconditionally.
-export function releaseStrictLock () {
+// Release the lockdown when a break ends. Safe to call unconditionally.
+export function releaseBreakLock () {
   if (!native) return
   native.setActive(false)
 }
