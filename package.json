@@ -69,6 +69,9 @@
           ]
         }
       ],
+      "asarUnpack": [
+        "node_modules/strict-lock/**"
+      ],
       "extendInfo": {
         "LSBackgroundOnly": 1,
         "LSUIElement": 1
@@ -164,6 +167,7 @@
     "node-desktop-idle-v2": "^1.1.23",
     "ps-list": "^9.0.0",
     "semver": "^7.7.4",
+    "strict-lock": "file:native/strict-lock",
     "windows-focus-assist": "^1.4.0"
   }
 }

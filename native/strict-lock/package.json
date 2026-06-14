@@ -1,0 +1,8 @@
+{
+  "name": "strict-lock",
+  "version": "1.0.0",
+  "private": true,
+  "description": "macOS event tap that swallows Cmd+Tab while a Stretchly strict-mode break is active",
+  "main": "index.js",
+  "gypfile": true
+}

@@ -29,6 +29,7 @@ import { registerBreakShortcuts } from './utils/breakShortcuts.js'
 import defaultSettings from './utils/defaultSettings.js'
 import StatusMessages from './utils/statusMessages.js'
 import DisplayManager from './utils/displayManager.js'
+import { engageStrictLock, releaseStrictLock } from './utils/strictModeLock.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -749,6 +750,9 @@ function startMicrobreak () {
     breakPlanner.postponesNumber < postponesLimit && postponesLimit > 0
   const showBreaksAsRegularWindows = settings.get('showBreaksAsRegularWindows')
 
+  // In strict mode, swallow Cmd+Tab (macOS) so the break can't be escaped.
+  if (strictMode) engageStrictLock()
+
   const modalPath = 'file://' + join(__dirname, '/microbreak.html')
   microbreakWins = []
 
@@ -914,6 +918,9 @@ function startBreak () {
     breakPlanner.postponesNumber < postponesLimit && postponesLimit > 0
   const showBreaksAsRegularWindows = settings.get('showBreaksAsRegularWindows')
 
+  // In strict mode, swallow Cmd+Tab (macOS) so the break can't be escaped.
+  if (strictMode) engageStrictLock()
+
   const modalPath = 'file://' + join(__dirname, '/break.html')
   breakWins = []
 
@@ -1068,6 +1075,9 @@ function startBreak () {
 }
 
 function breakComplete (shouldPlaySound, windows, breakType) {
+  // Lift the strict-mode Cmd+Tab lockdown on every break teardown
+  // (finish / skip / postpone). No-op if it was never engaged.
+  releaseStrictLock()
   if (settings.get('endBreakShortcut') && globalShortcut.isRegistered(settings.get('endBreakShortcut'))) {
     globalShortcut.unregister(settings.get('endBreakShortcut'))
   }

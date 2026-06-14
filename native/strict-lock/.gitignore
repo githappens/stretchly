@@ -1,0 +1,2 @@
+# node-gyp build output (compiled per-machine / per-Electron-ABI)
+build/
