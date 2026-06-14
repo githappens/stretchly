@@ -746,7 +746,10 @@ function startMicrobreak () {
   const strictMode = settings.get('microbreakStrictMode')
   const postponesLimit = settings.get('microbreakPostponesLimit')
   const postponableDurationPercent = settings.get('microbreakPostponableDurationPercent')
-  const postponable = settings.get('microbreakPostpone') &&
+  // In manual/idle mode (both break types off) breaks are CLI-triggered one-offs;
+  // postponing (which reschedules) makes no sense, so offer skip instead.
+  const manualMode = !settings.get('microbreak') && !settings.get('break')
+  const postponable = !manualMode && settings.get('microbreakPostpone') &&
     breakPlanner.postponesNumber < postponesLimit && postponesLimit > 0
   const showBreaksAsRegularWindows = settings.get('showBreaksAsRegularWindows')
 
@@ -917,7 +920,10 @@ function startBreak () {
   const strictMode = settings.get('breakStrictMode')
   const postponesLimit = settings.get('breakPostponesLimit')
   const postponableDurationPercent = settings.get('breakPostponableDurationPercent')
-  const postponable = settings.get('breakPostpone') &&
+  // In manual/idle mode (both break types off) breaks are CLI-triggered one-offs;
+  // postponing (which reschedules) makes no sense, so offer skip instead.
+  const manualMode = !settings.get('microbreak') && !settings.get('break')
+  const postponable = !manualMode && settings.get('breakPostpone') &&
     breakPlanner.postponesNumber < postponesLimit && postponesLimit > 0
   const showBreaksAsRegularWindows = settings.get('showBreaksAsRegularWindows')
 
