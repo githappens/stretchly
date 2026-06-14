@@ -254,16 +254,9 @@ window.onload = async (e) => {
 
   setWindowHeight()
 
-  document.querySelectorAll('.enabletype').forEach((element) => {
-    element.onclick = async (event) => {
-      const enabletypeChecked = document.querySelectorAll('.enabletype:checked')
-      if (enabletypeChecked.length === 0) {
-        element.checked = true
-        window.settings.saveSettings(element.value, element.checked)
-        window.alert(await window.i18next.t('preferences.schedule.cantDisableBoth'))
-      }
-    }
-  })
+  // Both break types may be disabled (manual-only mode): breaks are then
+  // triggered on demand via the `stretchly mini`/`stretchly long` CLI rather
+  // than on a timer. Saving is handled by the generic checkbox handler above.
 
   document.querySelector('.settings > div > button').onclick = (event) => {
     window.stretchly.restoreDefaults()

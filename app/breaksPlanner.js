@@ -114,6 +114,14 @@ class BreaksPlanner extends EventEmitter {
     if (this.scheduler) this.scheduler.cancel()
     const shouldBreak = this.settings.get('break')
     const shouldMicrobreak = this.settings.get('microbreak')
+    if (!shouldBreak && !shouldMicrobreak) {
+      // Manual-only mode: nothing is scheduled automatically. Breaks are
+      // triggered on demand via skipToMicrobreak()/skipToBreak() (e.g. the
+      // `stretchly mini`/`stretchly long` CLI commands). An idle scheduler
+      // (never planned, reference null) keeps every scheduler consumer safe.
+      this.scheduler = new Scheduler(null, 0, null)
+      return
+    }
     const interval = this.settings.get('microbreakInterval')
     const breakNotification = this.settings.get('breakNotification')
     const breakNotificationInterval = this.settings.get('breakNotificationInterval')

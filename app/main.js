@@ -1610,6 +1610,16 @@ ipcMain.on('save-setting', function (event, key, value) {
 
   settings.set(key, value)
 
+  // Enabling/disabling a break type changes what should be scheduled, so
+  // re-plan immediately instead of waiting for the current cycle to finish.
+  // When both types are now disabled this drops the planner into idle.
+  // Skip while paused or mid-break so we don't cancel an active break.
+  if ((key === 'microbreak' || key === 'break') && !breakPlanner.isPaused &&
+      breakPlanner.scheduler.reference !== 'finishMicrobreak' &&
+      breakPlanner.scheduler.reference !== 'finishBreak') {
+    breakPlanner.nextBreak()
+  }
+
   updateTray()
 })
 
