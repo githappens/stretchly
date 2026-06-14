@@ -10,6 +10,8 @@
     "postinstall": "electron-builder install-app-deps",
     "pack": "electron-builder build --dir",
     "pack:local": "bash scripts/pack-local.sh",
+    "sign:mac": "bash scripts/sign-mac.sh",
+    "deploy": "bash scripts/deploy-local.sh",
     "dist": "electron-builder build",
     "test": "vitest run",
     "test-single": "vitest run $1",
