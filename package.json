@@ -9,6 +9,7 @@
     "dev": "cross-env NODE_ENV=development electron . --trace-warnings --trace-deprecation --enable-logging --remote-debugging-port=9222",
     "postinstall": "electron-builder install-app-deps",
     "pack": "electron-builder build --dir",
+    "pack:local": "bash scripts/pack-local.sh",
     "dist": "electron-builder build",
     "test": "vitest run",
     "test-single": "vitest run $1",

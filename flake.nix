@@ -21,6 +21,9 @@
           ];
 
           shellHook = ''
+            # Keep node_modules under build/ so its binaries clear Santa's
+            # execution allow-list (see scripts/relocate-node-modules.sh).
+            [ -f scripts/relocate-node-modules.sh ] && bash scripts/relocate-node-modules.sh
             echo "Stretchly dev shell — node $(node --version), npm $(npm --version)"
           '';
         };
