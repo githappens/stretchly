@@ -8,5 +8,6 @@ coverage
 .idea
 .flatpak-builder/
 *build-dir/
+.direnv/
 repo/
 flatpak-node-generator.py
