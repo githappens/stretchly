@@ -112,30 +112,6 @@ async function initialize (cmd, isAppStart = true) {
         log.info(`Stretchly: migrating preferences from Stretchly v${context.fromVersion} to v${context.toVersion}`)
       },
       migrations: {
-        '1.13.0': store => {
-          if (store.has('pauseBreaksShortcut')) {
-            store.set('pauseBreaksToggleShortcut', store.get('pauseBreaksShortcut'))
-            log.info(`Stretchly: settings pauseBreaksToggleShortcut to "${store.get('pauseBreaksShortcut')}"`)
-            store.delete('pauseBreaksShortcut')
-            log.info('Stretchly: removing pauseBreaksShortcut')
-          } else {
-            log.info('Stretchly: not migrating pauseBreaksShortcut')
-          }
-          if (store.has('pauseBreaksShortcut')) {
-            store.delete('resumeBreaksShortcut')
-            log.info('Stretchly: removing resumeBreaksShortcut')
-          }
-        },
-        '1.17.0': store => {
-          if (store.has('showBreakActionsInStrictMode')) {
-            store.set('showTrayMenuInStrictMode', store.get('showBreakActionsInStrictMode'))
-            log.info(`Stretchly: settings showTrayMenuInStrictMode to "${store.get('showBreakActionsInStrictMode')}"`)
-            store.delete('showBreakActionsInStrictMode')
-            log.info('Stretchly: removing showBreakActionsInStrictMode')
-          } else {
-            log.info('Stretchly: not migrating showBreakActionsInStrictMode')
-          }
-        },
         '1.19.0': store => {
           if (store.has('audio')) {
             const legacyAudio = store.get('audio')
@@ -163,32 +139,6 @@ async function initialize (cmd, isAppStart = true) {
             log.info('Stretchly: removing breakStartSoundPlaying')
           } else {
             log.info('Stretchly: not migrating breakStartSoundPlaying')
-          }
-        },
-        '1.20.0': store => {
-          if (store.has('timeToBreakInTray')) {
-            if (store.get('timeToBreakInTray')) {
-              store.set('trayIconStyle', 'time')
-              log.info('Stretchly: migrating timeToBreakInTray to trayIconStyle="time"')
-            } else {
-              store.set('trayIconStyle', 'default')
-              log.info('Stretchly: migrating tray settings to trayIconStyle="default"')
-            }
-            store.delete('timeToBreakInTray')
-          }
-        },
-        '1.22.0': store => {
-          if (store.has('useMonochromeInvertedTrayIcon')) {
-            if (store.get('useMonochromeInvertedTrayIcon')) {
-              store.set('trayIconThemeSource', 'dark')
-              log.info('Stretchly: migrating useMonochromeInvertedTrayIcon to trayIconThemeSource="dark"')
-            } else {
-              store.set('trayIconThemeSource', 'system')
-              log.info('Stretchly: migrating useMonochromeInvertedTrayIcon to trayIconThemeSource="system"')
-            }
-            store.delete('useMonochromeInvertedTrayIcon')
-          } else {
-            log.info('Stretchly: not migrating useMonochromeInvertedTrayIcon')
           }
         }
       },
