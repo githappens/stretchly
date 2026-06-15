@@ -1,18 +1,13 @@
-import VersionChecker from './utils/versionChecker.js'
 import { setSameWidths } from './utils/sameWidths.js'
 import HtmlTranslate from './utils/htmlTranslate.js'
 
 import './platform.js'
 
-const versionChecker = new VersionChecker()
 let eventsAttached = false
 
 window.onload = async (e) => {
   const bounds = await window.stretchly.getWindowBounds()
   const settings = await window.settings.currentSettings()
-  if (settings.disableAppUpdateFeatures) {
-    document.querySelector('#checkNewVersion').closest('div').classList.add('hidden')
-  }
 
   if (settings.hideStrictModePreferences) {
     document.querySelectorAll('[data-strict-mode]').forEach(element => {
@@ -235,16 +230,6 @@ window.onload = async (e) => {
   })
 
   document.querySelector('.version').innerHTML = await window.stretchly.getVersion()
-  if (!settings.disableAppUpdateFeatures) {
-    versionChecker.latest()
-      .then(version => {
-        document.querySelector('.latestVersion').innerHTML = version.replace('v', '')
-      })
-      .catch(exception => {
-        console.error(exception)
-        document.querySelector('.latestVersion').innerHTML = 'N/A'
-      })
-  }
 
   function setWindowHeight () {
     const classes = document.querySelector('body').classList

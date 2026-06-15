@@ -12,13 +12,6 @@ function exposeElectronApi () {
   })
 }
 
-function exposeGlobal () {
-  contextBridge.exposeInMainWorld('global', {
-    setValue: (name, value) => ipcRenderer.send('set-global-value', name, value),
-    getValue: (name) => ipcRenderer.invoke('get-global-value', name)
-  })
-}
-
 function exposeI18next () {
   contextBridge.exposeInMainWorld('i18next', {
     t: (key, options) => ipcRenderer.invoke('i18next-translate', key, options),
@@ -50,16 +43,6 @@ function exposeRuntime () {
   })
 }
 
-function exposeSemver () {
-  contextBridge.exposeInMainWorld('semver', {
-    valid: (version) => semver.valid(version),
-    clean: (version) => semver.clean(version),
-    coerce: (version) => semver.coerce(version),
-    gt: (a, b) => semver.gt(a, b),
-    gte: (a, b) => semver.gte(a, b)
-  })
-}
-
 function exposeSettings () {
   contextBridge.exposeInMainWorld('settings', {
     get: (key) => ipcRenderer.invoke('settings-get', key),
@@ -80,8 +63,6 @@ function exposeStretchly () {
       (_event, file, volume) => callback(file, volume)),
     onShowNotification: (callback) => ipcRenderer.on('show-notification',
       (_event, text, silent) => callback(text, silent)),
-    onCheckVersion: (callback) => ipcRenderer.on('check-version',
-      (_event, oldVersion, notify, silent) => callback(oldVersion, notify, silent)),
     getWindowBounds: () => ipcRenderer.invoke('get-window-bounds'),
     getVersion: () => ipcRenderer.invoke('get-version'),
     setWindowSize: (width, height) => ipcRenderer.send('set-window-size', width, height),
@@ -118,10 +99,8 @@ function exposeUtils () {
 
 export {
   exposeElectronApi,
-  exposeGlobal,
   exposeI18next,
   exposeBreaks,
-  exposeSemver,
   exposeSettings,
   exposeStretchly,
   exposeRuntime,

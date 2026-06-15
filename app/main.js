@@ -66,7 +66,6 @@ let preferencesWin = null
 let settings
 let nextIdea = null
 let danger = 0
-let updateChecker
 
 if (insideWindowsPortable()) {
   const portableDataPath = join(process.env.PORTABLE_EXECUTABLE_DIR, 'Data')
@@ -82,18 +81,6 @@ log.initialize({ preload: true })
 if (process.platform === 'win32') {
   app.setAppUserModelId('Stretchly')
 }
-
-const global = {
-  isNewVersion: false
-}
-
-ipcMain.on('set-global-value', (event, name, value) => {
-  global[name] = value
-})
-
-ipcMain.handle('get-global-value', (event, name) => {
-  return global[name]
-})
 
 const commandLineArguments = process.argv
   .slice(app.isPackaged ? 1 : 2)
@@ -356,7 +343,6 @@ function windowIconPath () {
 
 function startProcessWin () {
   if (processWin) {
-    planVersionCheck()
     return
   }
   const modalPath = 'file://' + join(__dirname, '/process.html')
@@ -371,30 +357,6 @@ function startProcessWin () {
     }
   })
   processWin.webContents.loadURL(modalPath)
-  processWin.webContents.once('ready-to-show', () => {
-    planVersionCheck()
-  })
-}
-
-function planVersionCheck (seconds = 1) {
-  if (settings.get('disableAppUpdateFeatures')) return
-  if (updateChecker) {
-    clearInterval(updateChecker)
-    updateChecker = null
-  }
-  updateChecker = setTimeout(checkVersion, seconds * 1000)
-}
-
-function checkVersion () {
-  if (settings.get('disableAppUpdateFeatures')) return
-  if (settings.get('checkNewVersion')) {
-    processWin.webContents.send('check-version',
-      `v${app.getVersion()}`,
-      settings.get('notifyNewVersion'),
-      settings.get('silentNotifications')
-    )
-    planVersionCheck(3600 * 48)
-  }
 }
 
 function startMicrobreakNotification () {
