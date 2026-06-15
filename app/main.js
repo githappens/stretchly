@@ -1,10 +1,9 @@
 import {
   app, nativeTheme, BrowserWindow, Menu, ipcMain,
-  screen, shell, dialog, globalShortcut, Tray,
-  powerMonitor
+  screen, shell, dialog, globalShortcut
 } from 'electron'
 import { EventEmitter } from 'node:events'
-import { readFile, writeFile, existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'path'
 import { resolveLocalImage } from './utils/imageResolver.js'
 import { fileURLToPath } from 'url'
@@ -13,21 +12,14 @@ import Backend from 'i18next-fs-backend'
 import log from 'electron-log/main.js'
 import Store from 'electron-store'
 import humanizeDuration from 'humanize-duration'
-import { DateTime } from 'luxon'
 
 import {
-  canPostpone, canSkip, formatTimeRemaining,
-  minutesRemaining, insideWindowsStore, insideFlatpak, insideSnap, insideWindowsPortable
+  formatTimeRemaining
 } from './utils/utils.js'
 import IdeasLoader from './utils/ideasLoader.js'
 import BreaksPlanner from './breaksPlanner.js'
-import AppIcon from './utils/appIcon.js'
-import { UntilMorning } from './utils/untilMorning.js'
-import AutostartManager from './utils/autostartManager.js'
 import Command from './utils/commands.js'
-import { registerBreakShortcuts } from './utils/breakShortcuts.js'
 import defaultSettings from './utils/defaultSettings.js'
-import StatusMessages from './utils/statusMessages.js'
 import DisplayManager from './utils/displayManager.js'
 import { engageBreakLock, releaseBreakLock } from './utils/breakLock.js'
 
@@ -62,151 +54,40 @@ process.on('uncaughtException', (err, _) => {
   })
 })
 
-nativeTheme.on('updated', function theThemeHasChanged () {
-  if (!gotTheLock) {
-    return
-  }
-  updateTray()
-})
-
 let microbreakIdeas
 let breakIdeas
 let breakPlanner
-let appIcon = null
-let autostartManager = null
 let displayManager = null
 let processWin = null
 let microbreakWins = null
 let breakWins = null
 let preferencesWin = null
-let welcomeWin = null
-let contributorPreferencesWin = null
-let syncPreferencesWin = null
-let myStretchlyWin = null
 let settings
-let pausedForSuspendOrLock = false
 let nextIdea = null
 let danger = 0
-let updateChecker
-let currentTrayIconPath = null
-let currentTrayMenuTemplate = null
-let trayUpdateIntervalObj = null
-
-if (insideWindowsPortable()) {
-  const portableDataPath = join(process.env.PORTABLE_EXECUTABLE_DIR, 'Data')
-  if (!existsSync(portableDataPath)) {
-    mkdirSync(portableDataPath, { recursive: true })
-  }
-  app.setPath('userData', portableDataPath)
-}
 
 log.initialize({ preload: true })
-
-// https://stackoverflow.com/questions/65859634/notification-from-electron-shows-electron-app-electron/65863174#65863174
-if (process.platform === 'win32') {
-  app.setAppUserModelId('Stretchly')
-}
-
-const global = {
-  isNewVersion: false,
-  isContributor: false
-}
-
-ipcMain.on('set-global-value', (event, name, value) => {
-  global[name] = value
-})
-
-ipcMain.handle('get-global-value', (event, name) => {
-  return global[name]
-})
 
 const commandLineArguments = process.argv
   .slice(app.isPackaged ? 1 : 2)
 
-const gotTheLock = app.requestSingleInstanceLock(commandLineArguments)
+const command = new Command(commandLineArguments, app.getVersion())
 
-if (!gotTheLock) {
-  const cmd = new Command(commandLineArguments, app.getVersion(), false)
-  cmd.runOrForward()
-  app.quit()
-} else {
-  app.on('second-instance', (event, commandLine, workingDirectory, commandLineArguments) => {
-    log.info(`Stretchly: arguments received from second instance: ${commandLineArguments}`)
-    const cmd = new Command(commandLineArguments, app.getVersion())
+// Process-per-break: no single-instance lock, no resident daemon. `mini`/`long`
+// fire one break then quit (quitAfterBreak); anything else opens Preferences.
+let quitAfterBreak = false
 
-    if (!cmd.hasSupportedCommand) {
-      return
-    }
-
-    if (!cmd.checkInMain()) {
-      log.info(`Stretchly: command '${cmd.command}' executed in second instance, dropped in main instance`)
-      return
-    }
-
-    switch (cmd.command) {
-      case 'reset':
-        log.info('Stretchly: resetting breaks (requested by second instance)')
-        resetBreaks()
-        break
-
-      case 'mini': {
-        log.info('Stretchly: skip to Mini break (requested by second instance)')
-        const delay = cmd.waitToMs()
-        if (delay === -1) {
-          log.error('Stretchly: error parsing wait interval to ms because of invalid value')
-          return
-        }
-        if (cmd.options.title) nextIdea = cmd.options.title
-        if (!cmd.options.noskip || delay) skipToMicrobreak(delay)
-        break
-      }
-
-      case 'long': {
-        log.info('Stretchly: skip to Long break (requested by second instance)')
-        const delay = cmd.waitToMs()
-        if (delay === -1) {
-          log.error('Stretchly: error parsing wait interval to ms because of invalid value')
-          return
-        }
-        nextIdea = [cmd.options.title ? cmd.options.title : null, cmd.options.text ? cmd.options.text : null]
-        if (!cmd.options.noskip || delay) skipToBreak(delay)
-        break
-      }
-
-      case 'resume':
-        log.info('Stretchly: resume Breaks (requested by second instance)')
-        if (breakPlanner.isPaused) resumeBreaks(false)
-        break
-
-      case 'toggle':
-        log.info('Stretchly: toggle Breaks (requested by second instance)')
-        if (breakPlanner.isPaused) resumeBreaks(false)
-        else pauseBreaks(1)
-        break
-
-      case 'pause': {
-        log.info('Stretchly: pause Breaks (requested by second instance)')
-        const duration = cmd.durationToMs(settings)
-        // -1 indicates an invalid value
-        if (duration === -1) {
-          log.error('Stretchly: error when parsing duration to ms because of invalid value')
-          return
-        }
-        pauseBreaks(duration)
-        break
-      }
-
-      case 'preferences':
-        log.info('Stretchly: open Preferences window (requested by second instance)')
-        createPreferencesWindow()
-        break
-    }
-  })
-}
-
-app.on('ready', initialize)
+app.on('ready', () => {
+  // help/version/logs print to stdout and exit without booting any UI
+  if (command.command === 'help' || command.command === 'version' || command.command === 'logs') {
+    command.runOrForward()
+    app.quit()
+    return
+  }
+  initialize(command)
+})
 app.on('window-all-closed', () => {
-  // do nothing, so app wont get closed
+  app.quit()
 })
 app.on('before-quit', (event) => {
   if ((breakPlanner?.scheduler?.reference === 'finishMicrobreak' && settings?.get('microbreakStrictMode')) ||
@@ -216,17 +97,10 @@ app.on('before-quit', (event) => {
     event.preventDefault()
   } else {
     globalShortcut.unregisterAll()
-    // Clean up D-Bus connections
-    if (autostartManager) {
-      autostartManager.disconnect()
-    }
   }
 })
 
-async function initialize (isAppStart = true) {
-  if (!gotTheLock) {
-    return
-  }
+async function initialize (cmd, isAppStart = true) {
   // TODO maybe we should not reinitialize but handle everything when we save new values for preferences
   log.info(`Stretchly: ${isAppStart ? '' : 're'}initializing...`)
 
@@ -238,38 +112,6 @@ async function initialize (isAppStart = true) {
         log.info(`Stretchly: migrating preferences from Stretchly v${context.fromVersion} to v${context.toVersion}`)
       },
       migrations: {
-        '1.13.0': store => {
-          if (store.has('pauseBreaksShortcut')) {
-            store.set('pauseBreaksToggleShortcut', store.get('pauseBreaksShortcut'))
-            log.info(`Stretchly: settings pauseBreaksToggleShortcut to "${store.get('pauseBreaksShortcut')}"`)
-            store.delete('pauseBreaksShortcut')
-            log.info('Stretchly: removing pauseBreaksShortcut')
-          } else {
-            log.info('Stretchly: not migrating pauseBreaksShortcut')
-          }
-          if (store.has('pauseBreaksShortcut')) {
-            store.delete('resumeBreaksShortcut')
-            log.info('Stretchly: removing resumeBreaksShortcut')
-          }
-        },
-        '1.17.0': store => {
-          if (store.has('showBreakActionsInStrictMode')) {
-            store.set('showTrayMenuInStrictMode', store.get('showBreakActionsInStrictMode'))
-            log.info(`Stretchly: settings showTrayMenuInStrictMode to "${store.get('showBreakActionsInStrictMode')}"`)
-            store.delete('showBreakActionsInStrictMode')
-            log.info('Stretchly: removing showBreakActionsInStrictMode')
-          } else {
-            log.info('Stretchly: not migrating showBreakActionsInStrictMode')
-          }
-        },
-        '1.18.2': store => {
-          if (insideFlatpak() || insideWindowsStore() || insideSnap()) {
-            if (!store.get('disableAppUpdateFeatures')) {
-              store.set('disableAppUpdateFeatures', true)
-              log.info('Stretchly: setting disableAppUpdateFeatures to true because we are in Flatpak/Windows Store/Snap build')
-            }
-          }
-        },
         '1.19.0': store => {
           if (store.has('audio')) {
             const legacyAudio = store.get('audio')
@@ -298,32 +140,6 @@ async function initialize (isAppStart = true) {
           } else {
             log.info('Stretchly: not migrating breakStartSoundPlaying')
           }
-        },
-        '1.20.0': store => {
-          if (store.has('timeToBreakInTray')) {
-            if (store.get('timeToBreakInTray')) {
-              store.set('trayIconStyle', 'time')
-              log.info('Stretchly: migrating timeToBreakInTray to trayIconStyle="time"')
-            } else {
-              store.set('trayIconStyle', 'default')
-              log.info('Stretchly: migrating tray settings to trayIconStyle="default"')
-            }
-            store.delete('timeToBreakInTray')
-          }
-        },
-        '1.22.0': store => {
-          if (store.has('useMonochromeInvertedTrayIcon')) {
-            if (store.get('useMonochromeInvertedTrayIcon')) {
-              store.set('trayIconThemeSource', 'dark')
-              log.info('Stretchly: migrating useMonochromeInvertedTrayIcon to trayIconThemeSource="dark"')
-            } else {
-              store.set('trayIconThemeSource', 'system')
-              log.info('Stretchly: migrating useMonochromeInvertedTrayIcon to trayIconThemeSource="system"')
-            }
-            store.delete('useMonochromeInvertedTrayIcon')
-          } else {
-            log.info('Stretchly: not migrating useMonochromeInvertedTrayIcon')
-          }
         }
       },
       watch: true
@@ -339,8 +155,6 @@ async function initialize (isAppStart = true) {
   if (!breakPlanner) {
     breakPlanner = new BreaksPlanner(settings)
     breakPlanner.nextBreak()
-    breakPlanner.on('startMicrobreakNotification', () => { startMicrobreakNotification() })
-    breakPlanner.on('startBreakNotification', () => { startBreakNotification() })
     breakPlanner.on('startMicrobreak', () => { startMicrobreak() })
     breakPlanner.on('finishMicrobreak', (shouldPlaySound, shouldPlanNext) => {
       if (settings.get('miniBreakManualFinish')) {
@@ -359,36 +173,7 @@ async function initialize (isAppStart = true) {
       decreaseDanger(2)
       finishBreak(shouldPlaySound, shouldPlanNext)
     })
-    breakPlanner.on('resumeBreaks', () => { resumeBreaks() })
-    breakPlanner.on('updateToolTip', function () {
-      updateTray()
-    })
-  } else {
-    breakPlanner.clear()
-    breakPlanner.appExclusionsManager.reinitialize(settings)
-    breakPlanner.doNotDisturb(settings.get('monitorDnd'))
-    breakPlanner.naturalBreaks(settings.get('naturalBreaks'))
-    breakPlanner.nextBreak()
   }
-
-  autostartManager = new AutostartManager({
-    app,
-    settings
-  })
-
-  if (!settings.get('_migratedOpenAtLogin')) {
-    // one time migration with 1.20 or after
-    settings.set('openAtLogin', await autostartManager.autoLaunchStatus())
-    settings.set('_migratedOpenAtLogin', true)
-    log.info('Stretchly: Migrated to openAtLogin')
-  }
-
-  const currentAutostartValue = await autostartManager.autoLaunchStatus()
-  const openAtLogin = settings.get('openAtLogin')
-  if (openAtLogin !== currentAutostartValue) {
-    autostartManager.setAutostartEnabled(openAtLogin)
-  }
-  log.info(`Stretchly: attempting to set autostart to ${openAtLogin}`)
 
   const imagesDir = join(app.getPath('userData'), 'images')
   if (!existsSync(imagesDir)) {
@@ -398,61 +183,47 @@ async function initialize (isAppStart = true) {
       log.error('Stretchly: error creating images directory', error)
     }
   }
-  // Initialize portal early for Flatpak so it's ready when user opens preferences
-  if (insideFlatpak()) {
-    autostartManager.flatpakPortalManager.initialize().catch(err => {
-      log.error('Stretchly: Failed to initialize portal manager during startup:', err)
-    })
-  }
 
   displayManager = new DisplayManager(settings)
 
   startI18next()
   startProcessWin()
-  createWelcomeWindow()
   nativeTheme.themeSource = settings.get('themeSource')
 
-  readFile(join(app.getPath('userData'), 'stamp'), 'utf8', (err, data) => {
-    if (err) {
-      return
-    }
-    if (DateTime.fromISO(data).month === DateTime.now().month) {
-      global.isContributor = true
-      log.info('Stretchly: Thanks for your contributions!')
-      if (preferencesWin) {
-        preferencesWin.webContents.send('enable-contributor-preferences')
-      }
-      updateTray()
-    }
-  })
-  startPowerMonitoring()
   if (preferencesWin) {
     preferencesWin.webContents.send('renderSettings', settings.store)
   }
-  if (welcomeWin) {
-    welcomeWin.webContents.send('renderSettings', settings.store)
-  }
-  if (contributorPreferencesWin) {
-    contributorPreferencesWin.webContents.send('renderSettings', settings.store)
-  }
   globalShortcut.unregisterAll()
 
-  registerBreakShortcuts({
-    settings,
-    log,
-    globalShortcut,
-    breakPlanner,
-    functions: { pauseBreaks, resumeBreaks, skipToBreak, skipToMicrobreak, resetBreaks }
-  })
+  if (isAppStart) {
+    switch (cmd.command) {
+      case 'mini':
+        quitAfterBreak = true
+        if (cmd.options && cmd.options.title) nextIdea = cmd.options.title
+        skipToMicrobreak()
+        break
 
-  updateTray()
+      case 'long':
+        quitAfterBreak = true
+        nextIdea = [
+          cmd.options && cmd.options.title ? cmd.options.title : null,
+          cmd.options && cmd.options.text ? cmd.options.text : null
+        ]
+        skipToBreak()
+        break
+
+      default:
+        createPreferencesWindow()
+        break
+    }
+  }
 }
 
 function startI18next () {
   i18next
     .use(Backend)
     .init({
-      lng: settings.get('language'),
+      lng: 'en',
       fallbackLng: 'en',
       debug: !app.isPackaged,
       backend: {
@@ -467,55 +238,11 @@ function startI18next () {
 }
 
 i18next.on('languageChanged', () => {
-  if (welcomeWin) {
-    welcomeWin.webContents.send('translate')
-  }
   if (preferencesWin) {
     preferencesWin.webContents.send('translate')
   }
-  updateTray()
   loadIdeas()
 })
-
-function onSuspendOrLock () {
-  log.info('System: suspend or lock')
-  if (settings.get('pauseForSuspendOrLock')) {
-    if (breakPlanner.isPaused || breakPlanner.dndManager.isOnDnd ||
-      breakPlanner.naturalBreaksManager.isSchedulerCleared ||
-      breakPlanner.appExclusionsManager.isSchedulerCleared) {
-      log.info('Stretchly: not pausing for suspendOrLock because paused already')
-    } else {
-      pausedForSuspendOrLock = true
-      pauseBreaks(1)
-      updateTray()
-    }
-  } else {
-    log.info('Stretchly: not pausing for suspendOrLock because setting is disabled')
-  }
-}
-
-function onResumeOrUnlock () {
-  log.info('System: resume or unlock')
-  if (pausedForSuspendOrLock) {
-    pausedForSuspendOrLock = false
-    resumeBreaks(false)
-  } else {
-    // corrrect the planner for the time spent in suspend
-    breakPlanner.correctScheduler()
-  }
-  updateTray()
-}
-
-function startPowerMonitoring () {
-  powerMonitor.removeListener('suspend', onSuspendOrLock)
-  powerMonitor.removeListener('lock-screen', onSuspendOrLock)
-  powerMonitor.removeListener('resume', onResumeOrUnlock)
-  powerMonitor.removeListener('unlock-screen', onResumeOrUnlock)
-  powerMonitor.on('suspend', onSuspendOrLock)
-  powerMonitor.on('lock-screen', onSuspendOrLock)
-  powerMonitor.on('resume', onResumeOrUnlock)
-  powerMonitor.on('unlock-screen', onResumeOrUnlock)
-}
 
 function closeWindows (windowArray) {
   for (const window of windowArray) {
@@ -535,46 +262,13 @@ function closeWindows (windowArray) {
   return null
 }
 
-function trayIconUseDarkColors () {
-  const source = settings.get('trayIconThemeSource')
-  if (source === 'light') return false
-  if (source === 'dark') return true
-  return nativeTheme.shouldUseDarkColors
-}
-
-function trayIconPath () {
-  const useDarkColors = trayIconUseDarkColors()
-  const params = {
-    paused:
-      breakPlanner.isPaused ||
-      breakPlanner.dndManager.isOnDnd ||
-      breakPlanner.naturalBreaksManager.isSchedulerCleared ||
-      breakPlanner.appExclusionsManager.isSchedulerCleared,
-    monochrome: settings.get('useMonochromeTrayIcon'),
-    inverted: useDarkColors,
-    darkMode: useDarkColors,
-    platform: process.platform,
-    trayIconStyle: settings.get('trayIconStyle'),
-    timeToBreak: minutesRemaining(breakPlanner.timeToNextBreak),
-    percentage: breakPlanner.progressPercentage,
-    reference: breakPlanner.scheduler.reference
-  }
-  const trayIconFileName = new AppIcon(params).trayIconFileName
-  const pathToTrayIcon = join(__dirname, '/images/app-icons/', trayIconFileName)
-  return pathToTrayIcon
-}
-
 function windowIconPath () {
-  const params = {
-    darkMode: nativeTheme.shouldUseDarkColors
-  }
-  const windowIconFileName = new AppIcon(params).windowIconFileName
-  return join(__dirname, '/images/app-icons', windowIconFileName)
+  const darkModeString = nativeTheme.shouldUseDarkColors ? 'Dark' : ''
+  return join(__dirname, '/images/app-icons', `tray${darkModeString}.png`)
 }
 
 function startProcessWin () {
   if (processWin) {
-    planVersionCheck()
     return
   }
   const modalPath = 'file://' + join(__dirname, '/process.html')
@@ -589,134 +283,6 @@ function startProcessWin () {
     }
   })
   processWin.webContents.loadURL(modalPath)
-  processWin.webContents.once('ready-to-show', () => {
-    planVersionCheck()
-  })
-}
-
-function createWelcomeWindow (isAppStart = true) {
-  if (settings.get('isFirstRun') && isAppStart) {
-    const modalPath = 'file://' + join(__dirname, '/welcome.html')
-    welcomeWin = new BrowserWindow({
-      x: displayManager.getDisplayX(-1, 1000),
-      y: displayManager.getDisplayY(-1, 750),
-      width: 1000,
-      height: 750,
-      show: false,
-      autoHideMenuBar: true,
-      icon: windowIconPath(),
-      backgroundColor: 'EDEDED',
-      webPreferences: {
-        preload: join(__dirname, './welcome-preload.mjs'),
-        sandbox: false
-      }
-    })
-    welcomeWin.webContents.loadURL(modalPath)
-    welcomeWin.once('ready-to-show', () => {
-      welcomeWin.center()
-      welcomeWin.show()
-    })
-    welcomeWin.once('closed', () => {
-      welcomeWin = null
-    })
-  }
-}
-
-function createContributorSettingsWindow () {
-  if (contributorPreferencesWin) {
-    contributorPreferencesWin.show()
-    return
-  }
-  const modalPath = 'file://' + join(__dirname, '/contributor-preferences.html')
-  contributorPreferencesWin = new BrowserWindow({
-    x: displayManager.getDisplayX(-1, 735),
-    y: displayManager.getDisplayY(),
-    width: 735,
-    show: false,
-    autoHideMenuBar: true,
-    icon: windowIconPath(),
-    backgroundColor: 'EDEDED',
-    webPreferences: {
-      preload: join(__dirname, './contributor-preferences-preload.mjs'),
-      sandbox: false
-    }
-  })
-  contributorPreferencesWin.webContents.loadURL(modalPath)
-  contributorPreferencesWin.once('ready-to-show', () => {
-    contributorPreferencesWin.center()
-    contributorPreferencesWin.show()
-  })
-  contributorPreferencesWin.once('closed', () => {
-    contributorPreferencesWin = null
-  })
-}
-
-function createSyncPreferencesWindow () {
-  if (syncPreferencesWin) {
-    syncPreferencesWin.show()
-    return
-  }
-
-  const syncPreferencesUrl = 'https://my.stretchly.net/app/v1/sync'
-  syncPreferencesWin = new BrowserWindow({
-    show: false,
-    autoHideMenuBar: true,
-    width: 1000,
-    height: 700,
-    icon: windowIconPath(),
-    x: displayManager.getDisplayX(),
-    y: displayManager.getDisplayY(),
-    backgroundColor: 'whitesmoke',
-    webPreferences: {
-      preload: join(__dirname, './electron-bridge.mjs'),
-      sandbox: false
-    }
-  })
-  syncPreferencesWin.webContents.loadURL(syncPreferencesUrl)
-
-  syncPreferencesWin.once('closed', () => {
-    syncPreferencesWin = null
-  })
-
-  syncPreferencesWin.once('ready-to-show', () => {
-    syncPreferencesWin.center()
-    syncPreferencesWin.show()
-  })
-}
-
-function planVersionCheck (seconds = 1) {
-  if (settings.get('disableAppUpdateFeatures')) return
-  if (updateChecker) {
-    clearInterval(updateChecker)
-    updateChecker = null
-  }
-  updateChecker = setTimeout(checkVersion, seconds * 1000)
-}
-
-function checkVersion () {
-  if (settings.get('disableAppUpdateFeatures')) return
-  if (settings.get('checkNewVersion')) {
-    processWin.webContents.send('check-version',
-      `v${app.getVersion()}`,
-      settings.get('notifyNewVersion'),
-      settings.get('silentNotifications')
-    )
-    planVersionCheck(3600 * 48)
-  }
-}
-
-function startMicrobreakNotification () {
-  showNotification(i18next.t('main.microbreakIn', { seconds: settings.get('microbreakNotificationInterval') / 1000 }))
-  log.info('Stretchly: showing Mini break notification')
-  breakPlanner.nextBreakAfterNotification()
-  updateTray()
-}
-
-function startBreakNotification () {
-  showNotification(i18next.t('main.breakIn', { seconds: settings.get('breakNotificationInterval') / 1000 }))
-  log.info('Stretchly: showing Long break notification')
-  breakPlanner.nextBreakAfterNotification()
-  updateTray()
 }
 
 function getBlurredBackgroundWindowOptions () {
@@ -724,14 +290,9 @@ function getBlurredBackgroundWindowOptions () {
     return {}
   }
 
-  switch (process.platform) {
-    case 'darwin':
-      return {
-        vibrancy: 'hud',
-        visualEffectState: 'active'
-      }
-    default:
-      return {}
+  return {
+    vibrancy: 'hud',
+    visualEffectState: 'active'
   }
 }
 
@@ -744,13 +305,6 @@ function startMicrobreak () {
 
   const breakDuration = settings.get('microbreakDuration')
   const strictMode = settings.get('microbreakStrictMode')
-  const postponesLimit = settings.get('microbreakPostponesLimit')
-  const postponableDurationPercent = settings.get('microbreakPostponableDurationPercent')
-  // In manual/idle mode (both break types off) breaks are CLI-triggered one-offs;
-  // postponing (which reschedules) makes no sense, so offer skip instead.
-  const manualMode = !settings.get('microbreak') && !settings.get('break')
-  const postponable = !manualMode && settings.get('microbreakPostpone') &&
-    breakPlanner.postponesNumber < postponesLimit && postponesLimit > 0
   const showBreaksAsRegularWindows = settings.get('showBreaksAsRegularWindows')
 
   // Swallow Cmd+Tab (macOS) so the break can't be escaped by switching apps.
@@ -781,16 +335,13 @@ function startMicrobreak () {
           finishMicrobreak(false)
           return
         }
-        if (canPostpone(postponable, passedPercent, postponableDurationPercent)) {
-          postponeMicrobreak()
-        } else if (canSkip(strictMode, postponable, passedPercent, postponableDurationPercent)) {
+        if (!strictMode) {
           increaseDanger(1)
           finishMicrobreak(false)
         }
       })
     }
     return [idea, startTime, breakDuration, strictMode,
-      postponable, postponableDurationPercent,
       calculateBackgroundColor(settings.get('miniBreakColor')), danger, settings.get('breakHealthMode')]
   })
 
@@ -817,23 +368,16 @@ function startMicrobreak () {
       alwaysOnTop: !showBreaksAsRegularWindows,
       hasShadow: false,
       title: 'Stretchly',
-      titleBarStyle: process.platform === 'darwin' ? (showBreaksAsRegularWindows ? 'default' : 'hidden') : undefined,
-      titleBarOverlay: process.platform === 'darwin' ? !showBreaksAsRegularWindows : undefined,
+      titleBarStyle: showBreaksAsRegularWindows ? 'default' : 'hidden',
+      titleBarOverlay: !showBreaksAsRegularWindows,
       webPreferences: {
         preload: join(__dirname, './microbreak-preload.mjs'),
         sandbox: false
       }
     }
 
-    if (settings.get('fullscreen') && process.platform !== 'darwin') {
-      windowOptions.width = displayManager.getDisplayWidth(localDisplayId)
-      windowOptions.height = displayManager.getDisplayHeight(localDisplayId)
-      windowOptions.x = displayManager.getDisplayX(localDisplayId, 0, true)
-      windowOptions.y = displayManager.getDisplayY(localDisplayId, 0, true)
-    } else if (!(settings.get('fullscreen') && process.platform === 'win32')) {
-      windowOptions.x = displayManager.getDisplayX(localDisplayId, windowOptions.width, false)
-      windowOptions.y = displayManager.getDisplayY(localDisplayId, windowOptions.height, false)
-    }
+    windowOptions.x = displayManager.getDisplayX(localDisplayId, windowOptions.width, false)
+    windowOptions.y = displayManager.getDisplayY(localDisplayId, windowOptions.height, false)
 
     let microbreakWinLocal = new BrowserWindow(windowOptions)
     // seems to help with multiple-displays problems
@@ -867,12 +411,6 @@ function startMicrobreak () {
         breakPlanner.emit('microbreakStarted', true)
         log.info('Stretchly: starting Mini break')
       }
-      if (!settings.get('fullscreen') && process.platform !== 'darwin') {
-        setTimeout(() => {
-          microbreakWinLocal.center()
-        }, 0)
-      }
-      updateTray()
     }
     ipcMain.on('mini-break-loaded', onMiniBreakLoaded)
 
@@ -918,13 +456,6 @@ function startBreak () {
 
   const breakDuration = settings.get('breakDuration')
   const strictMode = settings.get('breakStrictMode')
-  const postponesLimit = settings.get('breakPostponesLimit')
-  const postponableDurationPercent = settings.get('breakPostponableDurationPercent')
-  // In manual/idle mode (both break types off) breaks are CLI-triggered one-offs;
-  // postponing (which reschedules) makes no sense, so offer skip instead.
-  const manualMode = !settings.get('microbreak') && !settings.get('break')
-  const postponable = !manualMode && settings.get('breakPostpone') &&
-    breakPlanner.postponesNumber < postponesLimit && postponesLimit > 0
   const showBreaksAsRegularWindows = settings.get('showBreaksAsRegularWindows')
 
   // Swallow Cmd+Tab (macOS) so the break can't be escaped by switching apps.
@@ -956,16 +487,13 @@ function startBreak () {
           finishBreak(false)
           return
         }
-        if (canPostpone(postponable, passedPercent, postponableDurationPercent)) {
-          postponeBreak()
-        } else if (canSkip(strictMode, postponable, passedPercent, postponableDurationPercent)) {
+        if (!strictMode) {
           increaseDanger(2)
           finishBreak(false)
         }
       })
     }
     return [idea, startTime, breakDuration, strictMode,
-      postponable, postponableDurationPercent,
       calculateBackgroundColor(settings.get('mainColor')), danger, settings.get('breakHealthMode')]
   })
 
@@ -992,23 +520,16 @@ function startBreak () {
       alwaysOnTop: !showBreaksAsRegularWindows,
       hasShadow: false,
       title: 'Stretchly',
-      titleBarStyle: process.platform === 'darwin' ? (showBreaksAsRegularWindows ? 'default' : 'hidden') : undefined,
-      titleBarOverlay: process.platform === 'darwin' ? !showBreaksAsRegularWindows : undefined,
+      titleBarStyle: showBreaksAsRegularWindows ? 'default' : 'hidden',
+      titleBarOverlay: !showBreaksAsRegularWindows,
       webPreferences: {
         preload: join(__dirname, './break-preload.mjs'),
         sandbox: false
       }
     }
 
-    if (settings.get('fullscreen') && process.platform !== 'darwin') {
-      windowOptions.width = displayManager.getDisplayWidth(localDisplayId)
-      windowOptions.height = displayManager.getDisplayHeight(localDisplayId)
-      windowOptions.x = displayManager.getDisplayX(localDisplayId, 0, true)
-      windowOptions.y = displayManager.getDisplayY(localDisplayId, 0, true)
-    } else if (!(settings.get('fullscreen') && process.platform === 'win32')) {
-      windowOptions.x = displayManager.getDisplayX(localDisplayId, windowOptions.width, false)
-      windowOptions.y = displayManager.getDisplayY(localDisplayId, windowOptions.height, false)
-    }
+    windowOptions.x = displayManager.getDisplayX(localDisplayId, windowOptions.width, false)
+    windowOptions.y = displayManager.getDisplayY(localDisplayId, windowOptions.height, false)
 
     let breakWinLocal = new BrowserWindow(windowOptions)
     // seems to help with multiple-displays problems
@@ -1042,13 +563,6 @@ function startBreak () {
         breakPlanner.emit('breakStarted', true)
         log.info('Stretchly: starting Long break')
       }
-
-      if (!settings.get('fullscreen') && process.platform !== 'darwin') {
-        setTimeout(() => {
-          breakWinLocal.center()
-        }, 0)
-      }
-      updateTray()
     }
     ipcMain.on('long-break-loaded', onLongBreakLoaded)
 
@@ -1150,7 +664,7 @@ function finishMicrobreak (shouldPlaySound = true, shouldPlanNext = true) {
   } else {
     breakPlanner.clear()
   }
-  updateTray()
+  if (quitAfterBreak) app.quit()
 }
 
 function finishBreak (shouldPlaySound = true, shouldPlanNext = true) {
@@ -1161,26 +675,10 @@ function finishBreak (shouldPlaySound = true, shouldPlanNext = true) {
   } else {
     breakPlanner.clear()
   }
-  updateTray()
+  if (quitAfterBreak) app.quit()
 }
 
-function postponeMicrobreak () {
-  increaseDanger(1)
-  microbreakWins = breakComplete(false, microbreakWins, 'mini')
-  breakPlanner.postponeCurrentBreak()
-  log.info('Stretchly: postponing Mini break')
-  updateTray()
-}
-
-function postponeBreak () {
-  increaseDanger(1)
-  breakWins = breakComplete(false, breakWins, 'long')
-  breakPlanner.postponeCurrentBreak()
-  log.info('Stretchly: postponing Long break')
-  updateTray()
-}
-
-function skipToMicrobreak (delay) {
+function skipToMicrobreak () {
   if (microbreakWins) {
     increaseDanger(1)
     microbreakWins = breakComplete(false, microbreakWins)
@@ -1189,17 +687,11 @@ function skipToMicrobreak (delay) {
     increaseDanger(2)
     breakWins = breakComplete(false, breakWins)
   }
-  if (delay) {
-    breakPlanner.skipToMicrobreak(delay)
-    log.info(`Stretchly: skipping to Mini break in ${delay}ms`)
-  } else {
-    breakPlanner.skipToMicrobreak()
-    log.info('Stretchly: skipping to Mini break')
-  }
-  updateTray()
+  breakPlanner.skipToMicrobreak()
+  log.info('Stretchly: skipping to Mini break')
 }
 
-function skipToBreak (delay) {
+function skipToBreak () {
   if (microbreakWins) {
     increaseDanger(1)
     microbreakWins = breakComplete(false, microbreakWins)
@@ -1208,28 +700,8 @@ function skipToBreak (delay) {
     increaseDanger(2)
     breakWins = breakComplete(false, breakWins)
   }
-  if (delay) {
-    breakPlanner.skipToBreak(delay)
-    log.info(`Stretchly: skipping to Long break in ${delay}ms`)
-  } else {
-    breakPlanner.skipToBreak()
-    log.info('Stretchly: skipping to Long break')
-  }
-  updateTray()
-}
-
-function resetBreaks () {
-  if (microbreakWins) {
-    microbreakWins = breakComplete(false, microbreakWins)
-  }
-  if (breakWins) {
-    breakWins = breakComplete(false, breakWins)
-  }
-  danger = 0
-  log.info(`Stretchly: danger reset to ${danger}`)
-  breakPlanner.reset()
-  log.info('Stretchly: resetting breaks')
-  updateTray()
+  breakPlanner.skipToBreak()
+  log.info('Stretchly: skipping to Long break')
 }
 
 function calculateBackgroundColor (color) {
@@ -1267,33 +739,6 @@ function loadIdeas () {
   microbreakIdeas = new IdeasLoader(miniBreakIdeasData).ideas()
 }
 
-function pauseBreaks (milliseconds) {
-  if (microbreakWins) {
-    increaseDanger(1)
-    finishMicrobreak(false)
-  }
-  if (breakWins) {
-    increaseDanger(2)
-    finishBreak(false)
-  }
-  breakPlanner.pause(milliseconds)
-  log.info(`Stretchly: pausing breaks for ${milliseconds}ms`)
-  updateTray()
-}
-
-function resumeBreaks (notify = true) {
-  if (breakPlanner.dndManager.isOnDnd) {
-    log.info('Stretchly: not resuming breaks because in Do Not Disturb')
-  } else {
-    breakPlanner.resume()
-    log.info('Stretchly: resuming breaks')
-    if (notify) {
-      showNotification(i18next.t('main.resumingBreaks'))
-    }
-  }
-  updateTray()
-}
-
 function createPreferencesWindow () {
   if (preferencesWin) {
     preferencesWin.show()
@@ -1326,243 +771,9 @@ function createPreferencesWindow () {
   })
   preferencesWin.once('closed', () => {
     preferencesWin = null
+    if (!microbreakWins && !breakWins) app.quit()
   })
 }
-
-function updateTray () {
-  if (process.platform === 'darwin') {
-    if (app.dock.isVisible) {
-      app.dock.hide()
-    }
-  }
-
-  if (!appIcon && !settings.get('showTrayIcon')) {
-    return
-  }
-
-  if (settings.get('showTrayIcon')) {
-    if (!appIcon) {
-      appIcon = new Tray(trayIconPath())
-      appIcon.on('double-click', () => {
-        createPreferencesWindow()
-      })
-      appIcon.on('click', () => {
-        appIcon.popUpContextMenu(Menu.buildFromTemplate(currentTrayMenuTemplate))
-      })
-    }
-    if (!trayUpdateIntervalObj) {
-      trayUpdateIntervalObj = setInterval(updateTray, 10000)
-    }
-
-    updateToolTip()
-
-    const newTrayIconPath = trayIconPath()
-    if (newTrayIconPath !== currentTrayIconPath) {
-      appIcon.setImage(newTrayIconPath)
-      currentTrayIconPath = newTrayIconPath
-    }
-
-    const newTrayMenuTemplate = getTrayMenuTemplate()
-    if (JSON.stringify(newTrayMenuTemplate) !== JSON.stringify(currentTrayMenuTemplate)) {
-      const trayMenu = Menu.buildFromTemplate(newTrayMenuTemplate)
-      appIcon.setContextMenu(trayMenu)
-      currentTrayMenuTemplate = newTrayMenuTemplate
-    }
-  }
-}
-
-function getTrayMenuTemplate () {
-  const trayMenu = []
-
-  if (!settings.get('disableAppUpdateFeatures') && global.isNewVersion) {
-    trayMenu.push({
-      label: i18next.t('main.downloadLatestVersion'),
-      click: function () {
-        shell.openExternal('https://hovancik.net/stretchly/downloads')
-      }
-    }, {
-      type: 'separator'
-    })
-  }
-
-  const statusMessage = new StatusMessages({
-    breakPlanner,
-    settings,
-    i18next,
-    humanizeDuration
-  }).trayMessage
-
-  if (statusMessage !== '') {
-    const messages = statusMessage.split('\n')
-    for (const index in messages) {
-      trayMenu.push({
-        label: messages[index],
-        enabled: false
-      })
-    }
-
-    trayMenu.push({
-      type: 'separator'
-    })
-  }
-
-  if ((breakPlanner.scheduler.reference === 'finishMicrobreak' && settings.get('microbreakStrictMode') &&
-        !settings.get('showTrayMenuInStrictMode')) ||
-      (breakPlanner.scheduler.reference === 'finishBreak' && settings.get('breakStrictMode') &&
-      !settings.get('showTrayMenuInStrictMode'))
-  ) {
-    // empty menu, we are in strict mode
-    return trayMenu
-  }
-
-  if (!(breakPlanner.isPaused || breakPlanner.dndManager.isOnDnd || breakPlanner.appExclusionsManager.isSchedulerCleared)) {
-    let submenu = []
-    if (settings.get('microbreak')) {
-      submenu = submenu.concat([{
-        label: i18next.t('main.toMicrobreak'),
-        click: () => skipToMicrobreak()
-      }])
-    }
-    if (settings.get('break')) {
-      submenu = submenu.concat([{
-        label: i18next.t('main.toBreak'),
-        click: () => skipToBreak()
-      }])
-    }
-    if (settings.get('break') || settings.get('microbreak')) {
-      trayMenu.push({
-        label: i18next.t('main.skipToTheNext'),
-        submenu
-      })
-    }
-  }
-
-  if (breakPlanner.isPaused) {
-    trayMenu.push({
-      label: i18next.t('main.resume'),
-      click: function () {
-        resumeBreaks(false)
-        updateTray()
-      }
-    })
-  } else if (!(breakPlanner.dndManager.isOnDnd || breakPlanner.appExclusionsManager.isSchedulerCleared)) {
-    trayMenu.push({
-      label: i18next.t('main.pause'),
-      submenu: [
-        {
-          label: i18next.t('utils.minutes', { count: 30 }),
-          accelerator: settings.get('pauseBreaksFor30MinutesShortcut') || null,
-          click: function () {
-            pauseBreaks(1800 * 1000)
-          }
-        }, {
-          label: i18next.t('main.forHour'),
-          accelerator: settings.get('pauseBreaksFor1HourShortcut') || null,
-          click: function () {
-            pauseBreaks(3600 * 1000)
-          }
-        }, {
-          label: i18next.t('main.for2Hours'),
-          accelerator: settings.get('pauseBreaksFor2HoursShortcut') || null,
-          click: function () {
-            pauseBreaks(3600 * 2 * 1000)
-          }
-        }, {
-          label: i18next.t('main.for5Hours'),
-          accelerator: settings.get('pauseBreaksFor5HoursShortcut') || null,
-          click: function () {
-            pauseBreaks(3600 * 5 * 1000)
-          }
-        }, {
-          label: i18next.t('main.untilMorning'),
-          accelerator: settings.get('pauseBreaksUntilMorningShortcut') || null,
-          click: function () {
-            const untilMorning = new UntilMorning(settings).msToSunrise()
-            pauseBreaks(untilMorning)
-          }
-        }, {
-          type: 'separator'
-        }, {
-          label: i18next.t('main.indefinitely'),
-          click: function () {
-            pauseBreaks(1)
-          }
-        }
-      ]
-    }, {
-      label: i18next.t('main.resetBreaks'),
-      click: resetBreaks
-    })
-  }
-
-  trayMenu.push({
-    type: 'separator'
-  }, {
-    label: i18next.t('main.preferences'),
-    click: function () {
-      createPreferencesWindow()
-    }
-  })
-
-  if (global.isContributor) {
-    trayMenu.push({
-      label: i18next.t('main.contributorPreferences'),
-      click: function () {
-        createContributorSettingsWindow()
-      }
-    }, {
-      label: i18next.t('main.syncPreferences'),
-      click: function () {
-        createSyncPreferencesWindow()
-      }
-    })
-  }
-
-  trayMenu.push({
-    type: 'separator'
-  }, {
-    label: i18next.t('main.quitStretchly'),
-    role: 'quit',
-    click: function () {
-      app.quit()
-    }
-  })
-
-  return trayMenu
-}
-
-function updateToolTip () {
-  let trayMessage = i18next.t('main.toolTipHeader')
-  const message = new StatusMessages({
-    breakPlanner,
-    settings,
-    i18next,
-    humanizeDuration
-  }).trayMessage
-  if (message !== '') {
-    trayMessage += '\n\n' + message
-  }
-  if (appIcon) {
-    appIcon.setToolTip(trayMessage)
-  }
-}
-
-function showNotification (text) {
-  processWin.webContents.send('show-notification',
-    text,
-    settings.get('silentNotifications')
-  )
-}
-
-ipcMain.on('postpone-mini-break', function (event) {
-  log.info('Stretchly: postpone button clicked during Mini break')
-  postponeMicrobreak()
-})
-
-ipcMain.on('postpone-long-break', function (event) {
-  log.info('Stretchly: postpone button clicked during Long break')
-  postponeBreak()
-})
 
 ipcMain.on('finish-mini-break', function (event, shouldPlaySound, manualAwaiting) {
   log.info(`Stretchly: finish button clicked during Mini break (manualAwaiting: ${manualAwaiting})`)
@@ -1585,18 +796,6 @@ ipcMain.on('finish-long-break', function (event, shouldPlaySound, manualAwaiting
 })
 
 ipcMain.on('save-setting', function (event, key, value) {
-  if (key === 'naturalBreaks') {
-    breakPlanner.naturalBreaks(value)
-  }
-
-  if (key === 'monitorDnd') {
-    breakPlanner.doNotDisturb(value)
-  }
-
-  if (key === 'language') {
-    i18next.changeLanguage(value)
-  }
-
   if (key === 'themeSource') {
     nativeTheme.themeSource = value
   }
@@ -1609,44 +808,12 @@ ipcMain.on('save-setting', function (event, key, value) {
     settings.set('miniBreakColor', value)
   }
 
-  if (key === 'showTrayIcon') {
-    settings.set('showTrayIcon', value)
-    if (value) {
-      updateTray()
-    } else {
-      clearInterval(trayUpdateIntervalObj)
-      trayUpdateIntervalObj = null
-      appIcon.destroy()
-      appIcon = null
-    }
-  }
-
-  if (key === 'openAtLogin') {
-    autostartManager.setAutostartEnabled(value)
-  }
-
   if (key === 'breakHealthMode' && !value) {
     danger = 0
     log.info('Stretchly: danger reset after disabling breakHealthMode')
   }
 
   settings.set(key, value)
-
-  // Enabling/disabling a break type changes what should be scheduled, so
-  // re-plan immediately instead of waiting for the current cycle to finish.
-  // When both types are now disabled this drops the planner into idle.
-  // Skip while paused or mid-break so we don't cancel an active break.
-  if ((key === 'microbreak' || key === 'break') && !breakPlanner.isPaused &&
-      breakPlanner.scheduler.reference !== 'finishMicrobreak' &&
-      breakPlanner.scheduler.reference !== 'finishBreak') {
-    breakPlanner.nextBreak()
-  }
-
-  updateTray()
-})
-
-ipcMain.on('update-tray', function (event) {
-  updateTray()
 })
 
 ipcMain.on('restore-defaults', (event) => {
@@ -1659,8 +826,8 @@ ipcMain.on('restore-defaults', (event) => {
   dialog.showMessageBox(dialogOpts).then(async (returnValue) => {
     if (returnValue.response === 0) {
       log.info('Stretchly: restoring default settings')
-      settings.store = Object.assign(defaultSettings, { isFirstRun: false, __internal__: settings.get('__internal__') })
-      initialize(false)
+      settings.store = Object.assign(defaultSettings, { __internal__: settings.get('__internal__') })
+      initialize(command, false)
       event.sender.reload()
     }
   })
@@ -1673,28 +840,17 @@ ipcMain.on('play-sound', (event, sound) => {
 ipcMain.handle('show-debug', (event) => {
   const reference = breakPlanner.scheduler.reference
   const timeleft = formatTimeRemaining(
-    breakPlanner.scheduler.timeLeft, settings.get('language'),
+    breakPlanner.scheduler.timeLeft, 'en',
     i18next, humanizeDuration
   )
-  const breaknumber = breakPlanner.breakNumber
-  const postponesnumber = breakPlanner.postponesNumber
-  const doNotDisturb = breakPlanner.dndManager.isOnDnd
-  let settingsFile = settings.path
-  let logsFile = log.transports.file.getFile().path
-  let imagesFolder = join(app.getPath('userData'), 'images')
-  if (insideWindowsStore()) {
-    settingsFile = settingsFile.replace('Roaming', 'Local\\Packages\\33881JanHovancik.stretchly_24fg4m0zq65je\\LocalCache\\Roaming')
-    logsFile = logsFile.replace('Roaming', 'Local\\Packages\\33881JanHovancik.stretchly_24fg4m0zq65je\\LocalCache\\Roaming')
-    imagesFolder = imagesFolder.replace('Roaming', 'Local\\Packages\\33881JanHovancik.stretchly_24fg4m0zq65je\\LocalCache\\Roaming')
-  }
+  const settingsFile = settings.path
+  const logsFile = log.transports.file.getFile().path
+  const imagesFolder = join(app.getPath('userData'), 'images')
   return [
     reference,
     timeleft,
-    breaknumber,
-    postponesnumber,
     settingsFile,
     logsFile,
-    doNotDisturb,
     imagesFolder
   ]
 })
@@ -1703,66 +859,8 @@ ipcMain.on('open-preferences', function (event) {
   createPreferencesWindow()
 })
 
-ipcMain.on('set-contributor', function (event) {
-  const dir = app.getPath('userData')
-  const contributorStampFile = `${dir}/stamp`
-  writeFile(contributorStampFile, DateTime.now().toString(), () => { })
-  global.isContributor = true
-  log.info('Stretchly: Logged in. Thanks for your contributions!')
-  if (preferencesWin) {
-    preferencesWin.webContents.send('enable-contributor-preferences')
-  }
-  updateTray()
-})
-
-ipcMain.on('open-contributor-preferences', function () {
-  createContributorSettingsWindow()
-})
-
-ipcMain.on('open-contributor-auth', function (event, provider) {
-  if (myStretchlyWin) {
-    myStretchlyWin.show()
-    return
-  }
-  const myStretchlyUrl = `https://my.stretchly.net/app/v1?provider=${provider}`
-  myStretchlyWin = new BrowserWindow({
-    autoHideMenuBar: true,
-    show: false,
-    width: 1000,
-    height: 700,
-    icon: windowIconPath(),
-    x: displayManager.getDisplayX(),
-    y: displayManager.getDisplayY(),
-    backgroundColor: 'whitesmoke',
-    webPreferences: {
-      preload: join(__dirname, './electron-bridge.mjs'),
-      sandbox: false
-    }
-  })
-  myStretchlyWin.webContents.loadURL(myStretchlyUrl)
-
-  myStretchlyWin.once('closed', () => {
-    myStretchlyWin = null
-  })
-
-  myStretchlyWin.once('ready-to-show', () => {
-    myStretchlyWin.center()
-    myStretchlyWin.show()
-  })
-})
-
-ipcMain.on('open-sync-preferences', () => {
-  createSyncPreferencesWindow()
-})
-
 ipcMain.handle('current-settings', (event) => {
   return settings.store
-})
-
-ipcMain.handle('restore-remote-settings', (event, remoteSettings) => {
-  log.info('Stretchly: restoring remote settings')
-  settings.store = remoteSettings
-  initialize(false)
 })
 
 ipcMain.handle('i18next-translate', (event, key, options) => {

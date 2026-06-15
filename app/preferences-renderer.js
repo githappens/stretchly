@@ -1,24 +1,19 @@
-import VersionChecker from './utils/versionChecker.js'
 import { setSameWidths } from './utils/sameWidths.js'
 import HtmlTranslate from './utils/htmlTranslate.js'
 
 import './platform.js'
 
-const versionChecker = new VersionChecker()
 let eventsAttached = false
 
 window.onload = async (e) => {
   const bounds = await window.stretchly.getWindowBounds()
   const settings = await window.settings.currentSettings()
-  if (settings.disableAppUpdateFeatures) {
-    document.querySelector('#checkNewVersion').closest('div').classList.add('hidden')
-  }
 
   if (settings.hideStrictModePreferences) {
     document.querySelectorAll('[data-strict-mode]').forEach(element => {
       element.classList.add('hidden')
     })
-    document.querySelector('#enablePostponeLong').closest('div').style.marginBottom = '56px'
+    document.querySelector('#longBreakFor').closest('div').style.marginBottom = '56px'
   }
 
   if (settings.hidePreferencesFileLocation) {
@@ -71,8 +66,7 @@ window.onload = async (e) => {
   document.onkeydown = async event => {
     if (event.key === 'd' && (event.ctrlKey || event.metaKey)) {
       const [
-        reference, timeleft, breaknumber,
-        postponesnumber, settingsfile, logsfile, doNotDisturb, imagesfolder
+        reference, timeleft, settingsfile, logsfile, imagesfolder
       ] = await window.stretchly.showDebug()
       const debugInfo = document.querySelector('.debug > :first-child')
       if (!debugInfo.classList.contains('hidden')) {
@@ -81,18 +75,13 @@ window.onload = async (e) => {
         debugInfo.classList.remove('hidden')
         document.querySelector('#reference').innerHTML = reference
         document.querySelector('#timeleft').innerHTML = timeleft
-        document.querySelector('#breakNumber').innerHTML = breaknumber
-        document.querySelector('#postponesNumber').innerHTML = postponesnumber
         document.querySelector('#settingsfile').innerHTML = settingsfile
         document.querySelector('#logsfile').innerHTML = logsfile
         document.querySelector('#imagesfolder').innerHTML = imagesfolder
-        document.querySelector('#donotdisturb').innerHTML = doNotDisturb
         document.querySelector('#node').innerHTML = await window.runtime.node()
         document.querySelector('#chrome').innerHTML = await window.runtime.chrome()
         document.querySelector('#electron').innerHTML = await window.runtime.electron()
         document.querySelector('#platform').innerHTML = await window.runtime.platform()
-        document.querySelector('#windowsStore').innerHTML = await window.runtime.windowsStore() || false
-        document.querySelector('#windowsPortable').innerHTML = await window.runtime.windowsPortable() || false
       }
       setWindowHeight()
     }
@@ -107,42 +96,9 @@ window.onload = async (e) => {
       range.value = settings[range.name] / divisor
       const unit = output.dataset.unit
       output.innerHTML = await window.utils.formatUnitAndValue(unit, range.value)
-      document.querySelector('#longBreakEvery').closest('div').querySelector('output')
-        .innerHTML = await window.i18next.t('utils.minutes', { count: parseInt(realBreakInterval()) })
     })
     setWindowHeight()
   })
-
-  window.stretchly.onEnableContributorPreferences(() => {
-    showContributorPreferencesButton()
-  })
-
-  const showContributorPreferencesButton = () => {
-    document.querySelectorAll('.contributor').forEach((item) => {
-      item.classList.remove('hidden')
-    })
-    document.querySelectorAll('.become').forEach((item) => {
-      item.classList.add('hidden')
-    })
-    document.querySelectorAll('.authenticate').forEach((item) => {
-      item.classList.add('hidden')
-    })
-    setWindowHeight()
-  }
-
-  if (await window.global.getValue('isContributor')) {
-    showContributorPreferencesButton()
-  }
-
-  document.querySelector('[name="contributorPreferences"]').onclick = (event) => {
-    event.preventDefault()
-    window.stretchly.openContributorPreferences()
-  }
-
-  document.querySelector('[name="syncPreferences"]').onclick = (event) => {
-    event.preventDefault()
-    window.stretchly.openSyncPreferences()
-  }
 
   document.querySelector('.debug button').onclick = async (event) => {
     event.preventDefault()
@@ -208,39 +164,19 @@ window.onload = async (e) => {
     }
   })
 
-  document.querySelector('#language').value = settings.language
-  if (!eventsAttached) {
-    document.querySelector('#language').onchange = (event) => {
-      window.settings.saveSettings('language', event.target.value)
-    }
-  }
-
-  document.querySelector('#trayIconStyle').value = settings.trayIconStyle
-  if (!eventsAttached) {
-    document.querySelector('#trayIconStyle').onchange = (event) => {
-      window.settings.saveSettings('trayIconStyle', event.target.value)
-    }
-  }
-
   document.querySelectorAll('input[type="range"]').forEach(async range => {
     const divisor = range.dataset.divisor
     const output = range.closest('div').querySelector('output')
     range.value = settings[range.name] / divisor
     const unit = output.dataset.unit
     output.innerHTML = await window.utils.formatUnitAndValue(unit, range.value)
-    document.querySelector('#longBreakEvery').closest('div').querySelector('output')
-      .innerHTML = await window.i18next.t('utils.minutes', { count: parseInt(realBreakInterval()) })
     if (!eventsAttached) {
       range.onchange = async event => {
         output.innerHTML = await window.utils.formatUnitAndValue(unit, range.value)
-        document.querySelector('#longBreakEvery').closest('div').querySelector('output')
-          .innerHTML = await window.i18next.t('utils.minutes', { count: parseInt(realBreakInterval()) })
         window.settings.saveSettings(range.name, range.value * divisor)
       }
       range.oninput = async event => {
         output.innerHTML = await window.utils.formatUnitAndValue(unit, range.value)
-        document.querySelector('#longBreakEvery').closest('div').querySelector('output')
-          .innerHTML = await window.i18next.t('utils.minutes', { count: parseInt(realBreakInterval()) })
       }
     }
   })
@@ -273,65 +209,19 @@ window.onload = async (e) => {
     }
   })
 
-  document.querySelector('[name="becomeContributor"]').onclick = () => {
-    window.electronApi.openExternal('https://hovancik.net/stretchly/sponsor')
-  }
-
-  document.querySelector('[name="alreadyContributor"]').onclick = () => {
-    document.querySelectorAll('.become').forEach((item) => {
-      item.classList.add('hidden')
-    })
-    document.querySelectorAll('.authenticate').forEach((item) => {
-      item.classList.remove('hidden')
-    })
-    setWindowHeight()
-  }
-
-  document.querySelectorAll('.authenticate a').forEach((button) => {
-    button.onclick = (event) => {
-      event.preventDefault()
-      window.stretchly.openContributorAuth(button.dataset.provider)
-    }
-  })
-
   document.querySelector('.version').innerHTML = await window.stretchly.getVersion()
-  if (!settings.disableAppUpdateFeatures) {
-    versionChecker.latest()
-      .then(version => {
-        document.querySelector('.latestVersion').innerHTML = version.replace('v', '')
-      })
-      .catch(exception => {
-        console.error(exception)
-        document.querySelector('.latestVersion').innerHTML = 'N/A'
-      })
-  }
 
   function setWindowHeight () {
-    const classes = document.querySelector('body').classList
     const scrollHeight = document.querySelector('body').scrollHeight
     const availHeight = window.screen.availHeight
     let height = null
-    if (classes.contains('win32')) {
-      if (scrollHeight + 40 > availHeight) {
-        height = availHeight
-      } else {
-        height = scrollHeight + 40
-      }
+    if (scrollHeight + 32 > availHeight) {
+      height = availHeight
     } else {
-      if (scrollHeight + 32 > availHeight) {
-        height = availHeight
-      } else {
-        height = scrollHeight + 32
-      }
+      height = scrollHeight + 32
     }
     if (height) {
       window.stretchly.setWindowSize(bounds.width, height)
     }
-  }
-
-  function realBreakInterval () {
-    const microbreakInterval = document.querySelector('#miniBreakEvery').value * 1
-    const breakInterval = document.querySelector('#longBreakEvery').value * 1
-    return microbreakInterval * (breakInterval + 1)
   }
 }

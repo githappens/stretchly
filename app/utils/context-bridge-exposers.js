@@ -1,4 +1,3 @@
-import semver from 'semver'
 import humanizeDuration from 'humanize-duration'
 import { contextBridge, ipcRenderer, shell } from 'electron'
 import * as utils from './utils.js'
@@ -9,13 +8,6 @@ function exposeElectronApi () {
     openExternal: (path) => shell.openExternal(path),
     openPath: (path) => shell.openPath(path),
     resolveLocalImage: (filename) => ipcRenderer.invoke('resolve-local-image', filename)
-  })
-}
-
-function exposeGlobal () {
-  contextBridge.exposeInMainWorld('global', {
-    setValue: (name, value) => ipcRenderer.send('set-global-value', name, value),
-    getValue: (name) => ipcRenderer.invoke('get-global-value', name)
   })
 }
 
@@ -30,7 +22,6 @@ function exposeBreaks (type) {
   contextBridge.exposeInMainWorld('breaks', {
     sendBreakData: () => ipcRenderer.invoke(`send-${type}-break-data`),
     finishBreak: (manualAwaiting) => ipcRenderer.send(`finish-${type}-break`, false, manualAwaiting),
-    postponeBreak: () => ipcRenderer.send(`postpone-${type}-break`),
     signalLoaded: () => ipcRenderer.send(`${type}-break-loaded`),
     onEnterManualAwait: (callback) => ipcRenderer.on('enter-manual-await', (_e, which) => callback(which)),
     sanitizeIdea: (value) => sanitizeIdea(value)
@@ -43,20 +34,7 @@ function exposeRuntime () {
     node: () => process.versions.node,
     chrome: () => process.versions.chrome,
     electron: () => process.versions.electron,
-    windowsStore: () => utils.insideWindowsStore(),
-    snap: () => utils.insideSnap(),
-    windowsPortable: () => utils.insideWindowsPortable(),
     getSystemVersion: () => process.getSystemVersion()
-  })
-}
-
-function exposeSemver () {
-  contextBridge.exposeInMainWorld('semver', {
-    valid: (version) => semver.valid(version),
-    clean: (version) => semver.clean(version),
-    coerce: (version) => semver.coerce(version),
-    gt: (a, b) => semver.gt(a, b),
-    gte: (a, b) => semver.gte(a, b)
   })
 }
 
@@ -78,24 +56,14 @@ function exposeStretchly () {
       () => callback()),
     onPlaySound: (callback) => ipcRenderer.on('play-sound',
       (_event, file, volume) => callback(file, volume)),
-    onShowNotification: (callback) => ipcRenderer.on('show-notification',
-      (_event, text, silent) => callback(text, silent)),
-    onCheckVersion: (callback) => ipcRenderer.on('check-version',
-      (_event, oldVersion, notify, silent) => callback(oldVersion, notify, silent)),
-    onEnableContributorPreferences: (callback) => ipcRenderer.on('enable-contributor-preferences',
-      () => callback()),
     getWindowBounds: () => ipcRenderer.invoke('get-window-bounds'),
     getVersion: () => ipcRenderer.invoke('get-version'),
     setWindowSize: (width, height) => ipcRenderer.send('set-window-size', width, height),
     restoreDefaults: () => ipcRenderer.send('restore-defaults'),
     closeWindow: () => ipcRenderer.send('close-current-window'),
-    openContributorAuth: (provider) => ipcRenderer.send('open-contributor-auth', provider),
-    openContributorPreferences: () => ipcRenderer.send('open-contributor-preferences'),
-    openSyncPreferences: () => ipcRenderer.send('open-sync-preferences'),
     openPreferences: () => ipcRenderer.send('open-preferences'),
     playSound: (name) => ipcRenderer.send('play-sound', name),
-    showDebug: () => ipcRenderer.invoke('show-debug'),
-    updateTray: () => ipcRenderer.send('update-tray')
+    showDebug: () => ipcRenderer.invoke('show-debug')
   })
 }
 
@@ -113,21 +81,14 @@ function exposeUtils () {
     },
     formatUnitAndValue: (unit, value) => {
       return utils.formatUnitAndValue(unit, value, i18n)
-    },
-    shouldShowNotificationTitle: (platform, systemVersion) => {
-      return utils.shouldShowNotificationTitle(platform, systemVersion, semver)
-    },
-    canPostpone: utils.canPostpone,
-    canSkip: utils.canSkip
+    }
   })
 }
 
 export {
   exposeElectronApi,
-  exposeGlobal,
   exposeI18next,
   exposeBreaks,
-  exposeSemver,
   exposeSettings,
   exposeStretchly,
   exposeRuntime,

@@ -25,10 +25,8 @@ describe('breaksPlanner', function () {
     unlink(join(__dirname, `${settingsName}.json`), () => {})
   })
 
-  describe('with both break types disabled (manual-only mode)', function () {
+  describe('CLI-only fire / time / finish', function () {
     beforeEach(() => {
-      settings.set('microbreak', false)
-      settings.set('break', false)
       planner = new BreaksPlanner(settings)
     })
 
@@ -47,19 +45,31 @@ describe('breaksPlanner', function () {
         setTimeout(resolve, 300)
       }))
 
-    it('still triggers a Mini break on demand via skipToMicrobreak()', () =>
+    it('triggers a Mini break on demand via skipToMicrobreak()', () =>
       new Promise((resolve) => {
         planner.nextBreak()
         planner.on('startMicrobreak', () => resolve())
         planner.skipToMicrobreak(50)
       }))
 
-    it('still triggers a Long break on demand via skipToBreak()', () =>
+    it('triggers a Long break on demand via skipToBreak()', () =>
       new Promise((resolve) => {
         planner.nextBreak()
         planner.on('startBreak', () => resolve())
         planner.skipToBreak(50)
       }))
+
+    it('skipToMicrobreak schedules a startMicrobreak', () => {
+      planner.nextBreak()
+      planner.skipToMicrobreak()
+      planner.scheduler.reference.should.equal('startMicrobreak')
+    })
+
+    it('skipToBreak schedules a startBreak', () => {
+      planner.nextBreak()
+      planner.skipToBreak()
+      planner.scheduler.reference.should.equal('startBreak')
+    })
 
     it('returns to idle after a manually triggered break finishes', () => {
       planner.nextBreak()
@@ -69,29 +79,36 @@ describe('breaksPlanner', function () {
       ;(planner.scheduler.reference === null).should.equal(true)
       planner.scheduler.timeLeft.should.equal(false)
     })
+
+    it('no longer exposes auto-scheduling / notification / postpone API', () => {
+      ;(planner.timeToNextBreak === undefined).should.equal(true)
+      ;(planner.progressPercentage === undefined).should.equal(true)
+      ;(planner.postponeCurrentBreak === undefined).should.equal(true)
+      ;(planner.nextBreakAfterNotification === undefined).should.equal(true)
+      ;(planner.reset === undefined).should.equal(true)
+    })
   })
 
-  describe('with at least one break type enabled (regression)', function () {
-    afterEach(() => {
-      if (planner && planner.scheduler) planner.scheduler.cancel()
+  describe('BreaksPlanner (no managers, no pause)', function () {
+    it('does not construct natural/dnd/exclusion managers', () => {
+      planner = new BreaksPlanner(settings)
+      ;(planner.naturalBreaksManager === undefined).should.equal(true)
+      ;(planner.dndManager === undefined).should.equal(true)
+      ;(planner.appExclusionsManager === undefined).should.equal(true)
     })
 
-    it('schedules a microbreak when only microbreaks are enabled', () => {
-      settings.set('microbreak', true)
-      settings.set('break', false)
-      settings.set('microbreakNotification', false)
+    it('no longer exposes pause/resume', () => {
+      planner = new BreaksPlanner(settings)
+      ;(planner.pause === undefined).should.equal(true)
+      ;(planner.resume === undefined).should.equal(true)
+      ;(planner.isPaused === undefined).should.equal(true)
+    })
+
+    it('skipToMicrobreak schedules a startMicrobreak', () => {
       planner = new BreaksPlanner(settings)
       planner.nextBreak()
+      planner.skipToMicrobreak()
       planner.scheduler.reference.should.equal('startMicrobreak')
-    })
-
-    it('schedules a break when only long breaks are enabled', () => {
-      settings.set('microbreak', false)
-      settings.set('break', true)
-      settings.set('breakNotification', false)
-      planner = new BreaksPlanner(settings)
-      planner.nextBreak()
-      planner.scheduler.reference.should.equal('startBreak')
     })
   })
 })

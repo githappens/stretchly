@@ -1,8 +1,7 @@
-import { formatTimeRemaining, formatElapsedDuration, formatTimeIn, canSkip, canPostpone, formatKeyboardShortcut, minutesRemaining, shouldShowNotificationTitle, formatUnitAndValue } from '../app/utils/utils'
+import { formatTimeRemaining, formatElapsedDuration, formatTimeIn, formatKeyboardShortcut, minutesRemaining, formatUnitAndValue } from '../app/utils/utils'
 import { beforeAll, afterAll, vi } from 'vitest'
 import 'chai/register-should'
 import i18next from 'i18next'
-import semver from 'semver'
 import { join } from 'path'
 import Backend from 'i18next-fs-backend'
 import humanizeDuration from 'humanize-duration'
@@ -98,50 +97,6 @@ describe('Others', () => {
     vi.useRealTimers()
   })
 
-  describe('canSkip', () => {
-    // strictMode, postpone, passedPercent, postponePercent
-    it('is false when in strict mode I', () => {
-      canSkip(true, true, 20, 30).should.equal(false)
-    })
-    it('is false when in strict mode II', () => {
-      canSkip(true, true, 40, 30).should.equal(false)
-    })
-    it('is false when in strict mode III', () => {
-      canSkip(true, false, 20, 30).should.equal(false)
-    })
-    it('is false when in strict mode IV', () => {
-      canSkip(true, false, 40, 30).should.equal(false)
-    })
-    it('is true when not in strict mode and after postpone percent', () => {
-      canSkip(false, true, 40, 30).should.equal(true)
-    })
-    it('is false when not in strict mode and before postpone percent', () => {
-      canSkip(false, true, 20, 30).should.equal(false)
-    })
-    it('is true when not in strict mode I', () => {
-      canSkip(false, false, 40, 30).should.equal(true)
-    })
-    it('is true when not in strict mode II', () => {
-      canSkip(false, false, 20, 30).should.equal(true)
-    })
-  })
-
-  describe('canPostpone', () => {
-    // postpone, passedPercent, postponePercent
-    it('is true when postpone and before postpone percent', () => {
-      canPostpone(true, 20, 30).should.equal(true)
-    })
-    it('is false when postpone and after postpone percent', () => {
-      canPostpone(true, 40, 30).should.equal(false)
-    })
-    it('is false when not postpone I', () => {
-      canPostpone(false, 20, 30).should.equal(false)
-    })
-    it('is false when not postpone II', () => {
-      canPostpone(false, 40, 30).should.equal(false)
-    })
-  })
-
   describe('formatKeyboardShortcut', () => {
     it('formats Or to /', () => {
       formatKeyboardShortcut('CmdOrCtrl+X').should.equal('Cmd/Ctrl + X')
@@ -163,26 +118,6 @@ describe('Others', () => {
     })
     it('ten minutes remaining', () => {
       minutesRemaining(600 * 1000).should.equal(10)
-    })
-  })
-
-  describe('shouldShowNotificationTitle', () => {
-    it('works for older windows', () => {
-      shouldShowNotificationTitle('win32', '10.0.19041', semver).should.equal(true)
-      shouldShowNotificationTitle('win32', '6.3.9600', semver).should.equal(true)
-    })
-    it('works for new windows', () => {
-      shouldShowNotificationTitle('win32', '10.0.19042', semver).should.equal(false)
-    })
-    it('works for older mac', () => {
-      shouldShowNotificationTitle('darwin', '10.15.1', semver).should.equal(true)
-    })
-    it('works for new mac', () => {
-      shouldShowNotificationTitle('darwin', '10.16', semver).should.equal(false)
-      shouldShowNotificationTitle('darwin', '11.0.1', semver).should.equal(false)
-    })
-    it('works for others', () => {
-      shouldShowNotificationTitle('linux', '1.0.0', semver).should.equal(true)
     })
   })
 })

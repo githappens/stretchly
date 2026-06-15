@@ -1,4 +1,5 @@
 import 'chai/register-should'
+import { expect } from 'vitest'
 import Command from '../app/utils/commands'
 
 describe('commands', () => {
@@ -8,30 +9,17 @@ describe('commands', () => {
     cmd.command.should.be.equal('help')
   })
 
-  it('should return help when there is no commmand', () => {
-    const input = []
-    const cmd = new Command(input, '1.2.3')
-    cmd.command.should.be.equal('help')
-  })
-
-  it('should parse a more complex command', () => {
-    const input = ['pause', '-d', 'until-morning']
-    const cmd = new Command(input, '1.2.3')
-    cmd.command.should.be.equal('pause')
-    cmd.options.duration.should.be.equal('until-morning')
-  })
-
   it('should drop all flags before the command', () => {
-    const input = ['--some-electron-flag=value', 'mini', '-T', 'test', '--noskip']
+    const input = ['--some-electron-flag=value', 'mini', '-T', 'test']
     const cmd = new Command(input, '1.2.3')
     cmd.command.should.be.equal('mini')
     cmd.options.title.should.be.equal('test')
   })
 
   it('should get options from a command', () => {
-    const cmd = new Command(['mini', '-T', 'test', '-n'], '1.2.3')
+    const cmd = new Command(['long', '-T', 'test', '-t', 'body'], '1.2.3')
     cmd.options.title.should.be.equal('test')
-    cmd.options.noskip.should.be.equal(true)
+    cmd.options.text.should.be.equal('body')
   })
 
   it('includes only the specified options in the resulting options object', () => {
@@ -48,136 +36,31 @@ describe('commands', () => {
     const cmd = new Command(['mini'], '1.2.3')
     cmd.hasSupportedCommand.should.be.equal(true)
   })
+})
 
-  it('parses a number duration as the number of minutes to pause', () => {
-    const input = ['pause', '-d', '60']
-    const cmd = new Command(input, '1.2.3')
-    cmd.durationToMs(null).should.be.equal(60 * 60 * 1000)
+describe('CLI surface (process-per-break)', () => {
+  it('defaults to preferences when no command is given', () => {
+    const cmd = new Command([], '1.0.0')
+    expect(cmd.command).toBe('preferences')
+    expect(cmd.hasSupportedCommand).toBe(true)
   })
 
-  it('parses a duration argument with hours and minutes', () => {
-    const input = ['pause', '-d', '4h39m']
-    const cmd = new Command(input, '1.2.3')
-    cmd.durationToMs(null).should.be.equal(4 * 60 * 60 * 1000 + 39 * 60 * 1000)
+  it('supports mini with only --title', () => {
+    const cmd = new Command(['mini', '-T', 'Stretch up!'], '1.0.0')
+    expect(cmd.hasSupportedCommand).toBe(true)
+    expect(cmd.options.title).toBe('Stretch up!')
   })
 
-  it('parses a duration argument with hours and minutes in the upper case', () => {
-    const input = ['pause', '-d', '4H39M']
-    const cmd = new Command(input, '1.2.3')
-    cmd.durationToMs(null).should.be.equal(4 * 60 * 60 * 1000 + 39 * 60 * 1000)
+  it('supports long with --title and --text', () => {
+    const cmd = new Command(['long', '-T', 'Title', '-t', 'Text'], '1.0.0')
+    expect(cmd.options.title).toBe('Title')
+    expect(cmd.options.text).toBe('Text')
   })
 
-  it('parses a duration argument with just the minutes', () => {
-    const input = ['pause', '-d', '60m']
-    const cmd = new Command(input, '1.2.3')
-    cmd.durationToMs(null).should.be.equal(60 * 60 * 1000)
-  })
-
-  it('parses a duration argument with just the hours', () => {
-    const input = ['pause', '-d', '184h']
-    const cmd = new Command(input, '1.2.3')
-    cmd.durationToMs(null).should.be.equal(184 * 60 * 60 * 1000)
-  })
-
-  it('returns -1 if there\'s extra text in the duration argument', () => {
-    new Command(['pause', '-d', 'foo4h39mbar'], '1.2.3').durationToMs(null).should.be.equal(-1)
-    new Command(['pause', '-d', 'foo4h39m'], '1.2.3').durationToMs(null).should.be.equal(-1)
-    new Command(['pause', '-d', '4h39mbar'], '1.2.3').durationToMs(null).should.be.equal(-1)
-  })
-
-  it('returns -1 if a number duration argument is zero', () => {
-    const input = ['pause', '-d', '0']
-    const cmd = new Command(input, '1.2.3')
-    cmd.durationToMs(null).should.be.equal(-1)
-  })
-
-  it('returns -1 if the duration argument with the hours and minutes evaluates to zero', () => {
-    const input = ['pause', '-d', '0h0m']
-    const cmd = new Command(input, '1.2.3')
-    cmd.durationToMs(null).should.be.equal(-1)
-  })
-
-  it('returns -1 if the duration argument with just the minutes evaluates to zero', () => {
-    const input = ['pause', '-d', '0m']
-    const cmd = new Command(input, '1.2.3')
-    cmd.durationToMs(null).should.be.equal(-1)
-  })
-
-  it('returns -1 if the duration argument with just the hours evaluates to zero', () => {
-    const input = ['pause', '-d', '0h']
-    const cmd = new Command(input, '1.2.3')
-    cmd.durationToMs(null).should.be.equal(-1)
-  })
-
-  it('should return -1 if the duration argument is not in a known format', () => {
-    const input = ['pause', '-d', '10i20k']
-    const cmd = new Command(input, '1.2.3')
-    cmd.durationToMs(null).should.be.equal(-1)
-  })
-
-  it('parses a number scheduler as the number of minutes to break', () => {
-    const input = ['long', '-w', '60']
-    const cmd = new Command(input, '1.2.3')
-    cmd.waitToMs(null).should.be.equal(60 * 60 * 1000)
-  })
-
-  it('parses a scheduler argument with hours and minutes', () => {
-    const input = ['long', '-w', '4h39m']
-    const cmd = new Command(input, '1.2.3')
-    cmd.waitToMs(null).should.be.equal(4 * 60 * 60 * 1000 + 39 * 60 * 1000)
-  })
-
-  it('parses a scheduler argument with hours and minutes in the upper case', () => {
-    const input = ['long', '-w', '4H39M']
-    const cmd = new Command(input, '1.2.3')
-    cmd.waitToMs(null).should.be.equal(4 * 60 * 60 * 1000 + 39 * 60 * 1000)
-  })
-
-  it('parses a scheduler argument with just the minutes', () => {
-    const input = ['long', '-w', '60m']
-    const cmd = new Command(input, '1.2.3')
-    cmd.waitToMs(null).should.be.equal(60 * 60 * 1000)
-  })
-
-  it('parses a scheduler argument with just the hours', () => {
-    const input = ['long', '-w', '184h']
-    const cmd = new Command(input, '1.2.3')
-    cmd.waitToMs(null).should.be.equal(184 * 60 * 60 * 1000)
-  })
-
-  it('returns -1 if there\'s extra text in the scheduler argument', () => {
-    new Command(['long', '-w', 'foo4h39mbar'], '1.2.3').waitToMs(null).should.be.equal(-1)
-    new Command(['long', '-w', 'foo4h39m'], '1.2.3').waitToMs(null).should.be.equal(-1)
-    new Command(['long', '-w', '4h39mbar'], '1.2.3').waitToMs(null).should.be.equal(-1)
-  })
-
-  it('returns -1 if a number scheduler argument is zero', () => {
-    const input = ['long', '-w', '0']
-    const cmd = new Command(input, '1.2.3')
-    cmd.waitToMs(null).should.be.equal(-1)
-  })
-
-  it('returns -1 if the scheduler argument with the hours and minutes evaluates to zero', () => {
-    const input = ['long', '-w', '0h0m']
-    const cmd = new Command(input, '1.2.3')
-    cmd.waitToMs(null).should.be.equal(-1)
-  })
-
-  it('returns -1 if the scheduler argument with just the minutes evaluates to zero', () => {
-    const input = ['long', '-w', '0m']
-    const cmd = new Command(input, '1.2.3')
-    cmd.waitToMs(null).should.be.equal(-1)
-  })
-
-  it('returns -1 if the scheduler argument with just the hours evaluates to zero', () => {
-    const input = ['long', '-w', '0h']
-    const cmd = new Command(input, '1.2.3')
-    cmd.waitToMs(null).should.be.equal(-1)
-  })
-
-  it('should return -1 if the scheduler argument is not in a known format', () => {
-    const input = ['long', '-w', '10i20k']
-    const cmd = new Command(input, '1.2.3')
-    cmd.waitToMs(null).should.be.equal(-1)
+  it('no longer supports pause/resume/toggle/reset', () => {
+    for (const gone of ['pause', 'resume', 'toggle', 'reset']) {
+      const cmd = new Command([gone], '1.0.0')
+      expect(cmd.hasSupportedCommand).toBe(false)
+    }
   })
 })
