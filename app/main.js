@@ -338,25 +338,27 @@ async function initialize (cmd, isAppStart = true) {
   }
   globalShortcut.unregisterAll()
 
-  switch (cmd.command) {
-    case 'mini':
-      quitAfterBreak = true
-      if (cmd.options && cmd.options.title) nextIdea = cmd.options.title
-      skipToMicrobreak()
-      break
+  if (isAppStart) {
+    switch (cmd.command) {
+      case 'mini':
+        quitAfterBreak = true
+        if (cmd.options && cmd.options.title) nextIdea = cmd.options.title
+        skipToMicrobreak()
+        break
 
-    case 'long':
-      quitAfterBreak = true
-      nextIdea = [
-        cmd.options && cmd.options.title ? cmd.options.title : null,
-        cmd.options && cmd.options.text ? cmd.options.text : null
-      ]
-      skipToBreak()
-      break
+      case 'long':
+        quitAfterBreak = true
+        nextIdea = [
+          cmd.options && cmd.options.title ? cmd.options.title : null,
+          cmd.options && cmd.options.text ? cmd.options.text : null
+        ]
+        skipToBreak()
+        break
 
-    default:
-      createPreferencesWindow()
-      break
+      default:
+        createPreferencesWindow()
+        break
+    }
   }
 }
 
@@ -1207,7 +1209,7 @@ ipcMain.on('restore-defaults', (event) => {
     if (returnValue.response === 0) {
       log.info('Stretchly: restoring default settings')
       settings.store = Object.assign(defaultSettings, { isFirstRun: false, __internal__: settings.get('__internal__') })
-      initialize(false)
+      initialize(command, false)
       event.sender.reload()
     }
   })
@@ -1306,7 +1308,7 @@ ipcMain.handle('current-settings', (event) => {
 ipcMain.handle('restore-remote-settings', (event, remoteSettings) => {
   log.info('Stretchly: restoring remote settings')
   settings.store = remoteSettings
-  initialize(false)
+  initialize(command, false)
 })
 
 ipcMain.handle('i18next-translate', (event, key, options) => {
