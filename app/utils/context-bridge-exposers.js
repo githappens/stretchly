@@ -57,8 +57,6 @@ function exposeStretchly () {
       () => callback()),
     onPlaySound: (callback) => ipcRenderer.on('play-sound',
       (_event, file, volume) => callback(file, volume)),
-    onShowNotification: (callback) => ipcRenderer.on('show-notification',
-      (_event, text, silent) => callback(text, silent)),
     getWindowBounds: () => ipcRenderer.invoke('get-window-bounds'),
     getVersion: () => ipcRenderer.invoke('get-version'),
     setWindowSize: (width, height) => ipcRenderer.send('set-window-size', width, height),

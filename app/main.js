@@ -853,16 +853,12 @@ ipcMain.handle('show-debug', (event) => {
     breakPlanner.scheduler.timeLeft, 'en',
     i18next, humanizeDuration
   )
-  const breaknumber = breakPlanner.breakNumber
-  const postponesnumber = breakPlanner.postponesNumber
   const settingsFile = settings.path
   const logsFile = log.transports.file.getFile().path
   const imagesFolder = join(app.getPath('userData'), 'images')
   return [
     reference,
     timeleft,
-    breaknumber,
-    postponesnumber,
     settingsFile,
     logsFile,
     imagesFolder

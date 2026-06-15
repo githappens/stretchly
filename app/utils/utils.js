@@ -54,9 +54,6 @@ function minutesRemaining (milliseconds) {
 }
 
 function shouldShowNotificationTitle (platform, systemVersion, semver) {
-  if (platform === 'win32' && semver.gte(semver.coerce(systemVersion), '10.0.19042')) {
-    return false
-  }
   if (platform === 'darwin' && semver.gte(semver.coerce(systemVersion), '10.16.0')) {
     return false
   }

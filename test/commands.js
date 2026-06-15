@@ -63,9 +63,4 @@ describe('CLI surface (process-per-break)', () => {
       expect(cmd.hasSupportedCommand).toBe(false)
     }
   })
-
-  it('mini/long are handled in the main process', () => {
-    expect(new Command(['mini'], '1.0.0').checkInMain()).toBe(true)
-    expect(new Command(['long'], '1.0.0').checkInMain()).toBe(true)
-  })
 })

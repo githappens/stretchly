@@ -123,13 +123,6 @@ describe('Others', () => {
   })
 
   describe('shouldShowNotificationTitle', () => {
-    it('works for older windows', () => {
-      shouldShowNotificationTitle('win32', '10.0.19041', semver).should.equal(true)
-      shouldShowNotificationTitle('win32', '6.3.9600', semver).should.equal(true)
-    })
-    it('works for new windows', () => {
-      shouldShowNotificationTitle('win32', '10.0.19042', semver).should.equal(false)
-    })
     it('works for older mac', () => {
       shouldShowNotificationTitle('darwin', '10.15.1', semver).should.equal(true)
     })

@@ -53,9 +53,8 @@ const allExamples = [{
 
 // Parse cmd line, check if valid and put variables in a dedicated object
 class Command {
-  constructor (input, version, isFirstInstance = true) {
+  constructor (input, version) {
     this.version = version
-    this.isFirstInstance = isFirstInstance
     this.supported = allCommands
     this.hasSupportedCommand = false
 
@@ -77,7 +76,7 @@ class Command {
     }
 
     if (!this.supported[this.command]) {
-      log.error(`Stretchly${this.isFirstInstance ? '' : ' 2'}: command '${this.command}' is not supported`)
+      log.error(`Stretchly: command '${this.command}' is not supported`)
       return
     }
 
@@ -109,7 +108,7 @@ class Command {
       })
 
       if (!valid) {
-        log.error(`Stretchly${this.isFirstInstance ? '' : ' 2'}: option '${name}' is not valid for command '${this.command}'`)
+        log.error(`Stretchly: option '${name}' is not valid for command '${this.command}'`)
       }
     }
 
@@ -129,24 +128,7 @@ class Command {
       case 'logs':
         this.logs()
         break
-
-      default:
-        if (this.hasSupportedCommand) {
-          log.info(`Stretchly${this.isFirstInstance ? '' : ' 2'}: forwarding command '${this.command}' to the main instance`)
-        }
     }
-  }
-
-  checkInMain () {
-    if (!this.command) {
-      return false
-    }
-
-    if (this.command === 'version' || this.command === 'help') {
-      return false
-    }
-
-    return true
   }
 
   ver () {

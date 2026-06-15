@@ -5,10 +5,6 @@ class BreaksPlanner extends EventEmitter {
   constructor (settings) {
     super()
     this.settings = settings
-    // Inert in CLI-only mode (no rotation / postpone), but still read by the
-    // show-debug IPC handler in main.js, so they are kept as zeroed fields.
-    this.breakNumber = 0
-    this.postponesNumber = 0
     this.scheduler = null
 
     this.on('microbreakStarted', (shouldPlaySound) => {
@@ -45,8 +41,6 @@ class BreaksPlanner extends EventEmitter {
 
   clear () {
     this.scheduler.cancel()
-    this.breakNumber = 0
-    this.postponesNumber = 0
   }
 }
 

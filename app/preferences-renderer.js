@@ -66,8 +66,7 @@ window.onload = async (e) => {
   document.onkeydown = async event => {
     if (event.key === 'd' && (event.ctrlKey || event.metaKey)) {
       const [
-        reference, timeleft, breaknumber,
-        postponesnumber, settingsfile, logsfile, imagesfolder
+        reference, timeleft, settingsfile, logsfile, imagesfolder
       ] = await window.stretchly.showDebug()
       const debugInfo = document.querySelector('.debug > :first-child')
       if (!debugInfo.classList.contains('hidden')) {
@@ -76,8 +75,6 @@ window.onload = async (e) => {
         debugInfo.classList.remove('hidden')
         document.querySelector('#reference').innerHTML = reference
         document.querySelector('#timeleft').innerHTML = timeleft
-        document.querySelector('#breakNumber').innerHTML = breaknumber
-        document.querySelector('#postponesNumber').innerHTML = postponesnumber
         document.querySelector('#settingsfile').innerHTML = settingsfile
         document.querySelector('#logsfile').innerHTML = logsfile
         document.querySelector('#imagesfolder').innerHTML = imagesfolder
@@ -215,22 +212,13 @@ window.onload = async (e) => {
   document.querySelector('.version').innerHTML = await window.stretchly.getVersion()
 
   function setWindowHeight () {
-    const classes = document.querySelector('body').classList
     const scrollHeight = document.querySelector('body').scrollHeight
     const availHeight = window.screen.availHeight
     let height = null
-    if (classes.contains('win32')) {
-      if (scrollHeight + 40 > availHeight) {
-        height = availHeight
-      } else {
-        height = scrollHeight + 40
-      }
+    if (scrollHeight + 32 > availHeight) {
+      height = availHeight
     } else {
-      if (scrollHeight + 32 > availHeight) {
-        height = availHeight
-      } else {
-        height = scrollHeight + 32
-      }
+      height = scrollHeight + 32
     }
     if (height) {
       window.stretchly.setWindowSize(bounds.width, height)

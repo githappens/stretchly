@@ -80,11 +80,6 @@ describe('breaksPlanner', function () {
       planner.scheduler.timeLeft.should.equal(false)
     })
 
-    it('keeps inert breakNumber/postponesNumber (read by show-debug)', () => {
-      planner.breakNumber.should.equal(0)
-      planner.postponesNumber.should.equal(0)
-    })
-
     it('no longer exposes auto-scheduling / notification / postpone API', () => {
       ;(planner.timeToNextBreak === undefined).should.equal(true)
       ;(planner.progressPercentage === undefined).should.equal(true)
