@@ -678,7 +678,7 @@ function finishBreak (shouldPlaySound = true, shouldPlanNext = true) {
   if (quitAfterBreak) app.quit()
 }
 
-function skipToMicrobreak (delay) {
+function skipToMicrobreak () {
   if (microbreakWins) {
     increaseDanger(1)
     microbreakWins = breakComplete(false, microbreakWins)
@@ -687,16 +687,11 @@ function skipToMicrobreak (delay) {
     increaseDanger(2)
     breakWins = breakComplete(false, breakWins)
   }
-  if (delay) {
-    breakPlanner.skipToMicrobreak(delay)
-    log.info(`Stretchly: skipping to Mini break in ${delay}ms`)
-  } else {
-    breakPlanner.skipToMicrobreak()
-    log.info('Stretchly: skipping to Mini break')
-  }
+  breakPlanner.skipToMicrobreak()
+  log.info('Stretchly: skipping to Mini break')
 }
 
-function skipToBreak (delay) {
+function skipToBreak () {
   if (microbreakWins) {
     increaseDanger(1)
     microbreakWins = breakComplete(false, microbreakWins)
@@ -705,13 +700,8 @@ function skipToBreak (delay) {
     increaseDanger(2)
     breakWins = breakComplete(false, breakWins)
   }
-  if (delay) {
-    breakPlanner.skipToBreak(delay)
-    log.info(`Stretchly: skipping to Long break in ${delay}ms`)
-  } else {
-    breakPlanner.skipToBreak()
-    log.info('Stretchly: skipping to Long break')
-  }
+  breakPlanner.skipToBreak()
+  log.info('Stretchly: skipping to Long break')
 }
 
 function calculateBackgroundColor (color) {
