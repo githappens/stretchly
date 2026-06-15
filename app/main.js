@@ -1,7 +1,6 @@
 import {
   app, nativeTheme, BrowserWindow, Menu, ipcMain,
-  screen, shell, dialog, globalShortcut, Tray,
-  powerMonitor
+  screen, shell, dialog, globalShortcut, Tray
 } from 'electron'
 import { EventEmitter } from 'node:events'
 import { readFile, writeFile, existsSync, mkdirSync } from 'node:fs'
@@ -25,7 +24,6 @@ import AppIcon from './utils/appIcon.js'
 import { UntilMorning } from './utils/untilMorning.js'
 import AutostartManager from './utils/autostartManager.js'
 import Command from './utils/commands.js'
-import { registerBreakShortcuts } from './utils/breakShortcuts.js'
 import defaultSettings from './utils/defaultSettings.js'
 import StatusMessages from './utils/statusMessages.js'
 import DisplayManager from './utils/displayManager.js'
@@ -62,12 +60,7 @@ process.on('uncaughtException', (err, _) => {
   })
 })
 
-nativeTheme.on('updated', function theThemeHasChanged () {
-  if (!gotTheLock) {
-    return
-  }
-  updateTray()
-})
+nativeTheme.on('updated', function theThemeHasChanged () {})
 
 let microbreakIdeas
 let breakIdeas
@@ -84,7 +77,6 @@ let contributorPreferencesWin = null
 let syncPreferencesWin = null
 let myStretchlyWin = null
 let settings
-let pausedForSuspendOrLock = false
 let nextIdea = null
 let danger = 0
 let updateChecker
@@ -123,90 +115,23 @@ ipcMain.handle('get-global-value', (event, name) => {
 const commandLineArguments = process.argv
   .slice(app.isPackaged ? 1 : 2)
 
-const gotTheLock = app.requestSingleInstanceLock(commandLineArguments)
+const command = new Command(commandLineArguments, app.getVersion())
 
-if (!gotTheLock) {
-  const cmd = new Command(commandLineArguments, app.getVersion(), false)
-  cmd.runOrForward()
-  app.quit()
-} else {
-  app.on('second-instance', (event, commandLine, workingDirectory, commandLineArguments) => {
-    log.info(`Stretchly: arguments received from second instance: ${commandLineArguments}`)
-    const cmd = new Command(commandLineArguments, app.getVersion())
+// Process-per-break: no single-instance lock, no resident daemon. `mini`/`long`
+// fire one break then quit (quitAfterBreak); anything else opens Preferences.
+let quitAfterBreak = false
 
-    if (!cmd.hasSupportedCommand) {
-      return
-    }
-
-    if (!cmd.checkInMain()) {
-      log.info(`Stretchly: command '${cmd.command}' executed in second instance, dropped in main instance`)
-      return
-    }
-
-    switch (cmd.command) {
-      case 'reset':
-        log.info('Stretchly: resetting breaks (requested by second instance)')
-        resetBreaks()
-        break
-
-      case 'mini': {
-        log.info('Stretchly: skip to Mini break (requested by second instance)')
-        const delay = cmd.waitToMs()
-        if (delay === -1) {
-          log.error('Stretchly: error parsing wait interval to ms because of invalid value')
-          return
-        }
-        if (cmd.options.title) nextIdea = cmd.options.title
-        if (!cmd.options.noskip || delay) skipToMicrobreak(delay)
-        break
-      }
-
-      case 'long': {
-        log.info('Stretchly: skip to Long break (requested by second instance)')
-        const delay = cmd.waitToMs()
-        if (delay === -1) {
-          log.error('Stretchly: error parsing wait interval to ms because of invalid value')
-          return
-        }
-        nextIdea = [cmd.options.title ? cmd.options.title : null, cmd.options.text ? cmd.options.text : null]
-        if (!cmd.options.noskip || delay) skipToBreak(delay)
-        break
-      }
-
-      case 'resume':
-        log.info('Stretchly: resume Breaks (requested by second instance)')
-        if (breakPlanner.isPaused) resumeBreaks(false)
-        break
-
-      case 'toggle':
-        log.info('Stretchly: toggle Breaks (requested by second instance)')
-        if (breakPlanner.isPaused) resumeBreaks(false)
-        else pauseBreaks(1)
-        break
-
-      case 'pause': {
-        log.info('Stretchly: pause Breaks (requested by second instance)')
-        const duration = cmd.durationToMs(settings)
-        // -1 indicates an invalid value
-        if (duration === -1) {
-          log.error('Stretchly: error when parsing duration to ms because of invalid value')
-          return
-        }
-        pauseBreaks(duration)
-        break
-      }
-
-      case 'preferences':
-        log.info('Stretchly: open Preferences window (requested by second instance)')
-        createPreferencesWindow()
-        break
-    }
-  })
-}
-
-app.on('ready', initialize)
+app.on('ready', () => {
+  // help/version/logs print to stdout and exit without booting any UI
+  if (command.command === 'help' || command.command === 'version' || command.command === 'logs') {
+    command.runOrForward()
+    app.quit()
+    return
+  }
+  initialize(command)
+})
 app.on('window-all-closed', () => {
-  // do nothing, so app wont get closed
+  app.quit()
 })
 app.on('before-quit', (event) => {
   if ((breakPlanner?.scheduler?.reference === 'finishMicrobreak' && settings?.get('microbreakStrictMode')) ||
@@ -223,10 +148,7 @@ app.on('before-quit', (event) => {
   }
 })
 
-async function initialize (isAppStart = true) {
-  if (!gotTheLock) {
-    return
-  }
+async function initialize (cmd, isAppStart = true) {
   // TODO maybe we should not reinitialize but handle everything when we save new values for preferences
   log.info(`Stretchly: ${isAppStart ? '' : 're'}initializing...`)
 
@@ -425,7 +347,6 @@ async function initialize (isAppStart = true) {
       updateTray()
     }
   })
-  startPowerMonitoring()
   if (preferencesWin) {
     preferencesWin.webContents.send('renderSettings', settings.store)
   }
@@ -437,15 +358,26 @@ async function initialize (isAppStart = true) {
   }
   globalShortcut.unregisterAll()
 
-  registerBreakShortcuts({
-    settings,
-    log,
-    globalShortcut,
-    breakPlanner,
-    functions: { pauseBreaks, resumeBreaks, skipToBreak, skipToMicrobreak, resetBreaks }
-  })
+  switch (cmd.command) {
+    case 'mini':
+      quitAfterBreak = true
+      if (cmd.options && cmd.options.title) nextIdea = cmd.options.title
+      skipToMicrobreak()
+      break
 
-  updateTray()
+    case 'long':
+      quitAfterBreak = true
+      nextIdea = [
+        cmd.options && cmd.options.title ? cmd.options.title : null,
+        cmd.options && cmd.options.text ? cmd.options.text : null
+      ]
+      skipToBreak()
+      break
+
+    default:
+      createPreferencesWindow()
+      break
+  }
 }
 
 function startI18next () {
@@ -476,46 +408,6 @@ i18next.on('languageChanged', () => {
   updateTray()
   loadIdeas()
 })
-
-function onSuspendOrLock () {
-  log.info('System: suspend or lock')
-  if (settings.get('pauseForSuspendOrLock')) {
-    if (breakPlanner.isPaused || breakPlanner.dndManager.isOnDnd ||
-      breakPlanner.naturalBreaksManager.isSchedulerCleared ||
-      breakPlanner.appExclusionsManager.isSchedulerCleared) {
-      log.info('Stretchly: not pausing for suspendOrLock because paused already')
-    } else {
-      pausedForSuspendOrLock = true
-      pauseBreaks(1)
-      updateTray()
-    }
-  } else {
-    log.info('Stretchly: not pausing for suspendOrLock because setting is disabled')
-  }
-}
-
-function onResumeOrUnlock () {
-  log.info('System: resume or unlock')
-  if (pausedForSuspendOrLock) {
-    pausedForSuspendOrLock = false
-    resumeBreaks(false)
-  } else {
-    // corrrect the planner for the time spent in suspend
-    breakPlanner.correctScheduler()
-  }
-  updateTray()
-}
-
-function startPowerMonitoring () {
-  powerMonitor.removeListener('suspend', onSuspendOrLock)
-  powerMonitor.removeListener('lock-screen', onSuspendOrLock)
-  powerMonitor.removeListener('resume', onResumeOrUnlock)
-  powerMonitor.removeListener('unlock-screen', onResumeOrUnlock)
-  powerMonitor.on('suspend', onSuspendOrLock)
-  powerMonitor.on('lock-screen', onSuspendOrLock)
-  powerMonitor.on('resume', onResumeOrUnlock)
-  powerMonitor.on('unlock-screen', onResumeOrUnlock)
-}
 
 function closeWindows (windowArray) {
   for (const window of windowArray) {
@@ -1150,7 +1042,7 @@ function finishMicrobreak (shouldPlaySound = true, shouldPlanNext = true) {
   } else {
     breakPlanner.clear()
   }
-  updateTray()
+  if (quitAfterBreak) app.quit()
 }
 
 function finishBreak (shouldPlaySound = true, shouldPlanNext = true) {
@@ -1161,7 +1053,7 @@ function finishBreak (shouldPlaySound = true, shouldPlanNext = true) {
   } else {
     breakPlanner.clear()
   }
-  updateTray()
+  if (quitAfterBreak) app.quit()
 }
 
 function postponeMicrobreak () {
@@ -1326,6 +1218,7 @@ function createPreferencesWindow () {
   })
   preferencesWin.once('closed', () => {
     preferencesWin = null
+    if (!microbreakWins && !breakWins) app.quit()
   })
 }
 
