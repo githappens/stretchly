@@ -164,10 +164,7 @@
     "i18next-fs-backend": "^2.6.5",
     "luxon": "^3.7.2",
     "meeussunmoon": "^3.1.0",
-    "node-desktop-idle-v2": "^1.1.23",
-    "ps-list": "^9.0.0",
     "semver": "^7.7.4",
-    "strict-lock": "file:native/strict-lock",
-    "windows-focus-assist": "^1.4.0"
+    "strict-lock": "file:native/strict-lock"
   }
 }

@@ -272,13 +272,6 @@ async function initialize (cmd, isAppStart = true) {
       decreaseDanger(2)
       finishBreak(shouldPlaySound, shouldPlanNext)
     })
-    breakPlanner.on('resumeBreaks', () => { resumeBreaks() })
-  } else {
-    breakPlanner.clear()
-    breakPlanner.appExclusionsManager.reinitialize(settings)
-    breakPlanner.doNotDisturb(settings.get('monitorDnd'))
-    breakPlanner.naturalBreaks(settings.get('naturalBreaks'))
-    breakPlanner.nextBreak()
   }
 
   autostartManager = new AutostartManager({
@@ -1091,18 +1084,6 @@ function loadIdeas () {
   microbreakIdeas = new IdeasLoader(miniBreakIdeasData).ideas()
 }
 
-function resumeBreaks (notify = true) {
-  if (breakPlanner.dndManager.isOnDnd) {
-    log.info('Stretchly: not resuming breaks because in Do Not Disturb')
-  } else {
-    breakPlanner.resume()
-    log.info('Stretchly: resuming breaks')
-    if (notify) {
-      showNotification(i18next.t('main.resumingBreaks'))
-    }
-  }
-}
-
 function createPreferencesWindow () {
   if (preferencesWin) {
     preferencesWin.show()
@@ -1177,14 +1158,6 @@ ipcMain.on('finish-long-break', function (event, shouldPlaySound, manualAwaiting
 })
 
 ipcMain.on('save-setting', function (event, key, value) {
-  if (key === 'naturalBreaks') {
-    breakPlanner.naturalBreaks(value)
-  }
-
-  if (key === 'monitorDnd') {
-    breakPlanner.doNotDisturb(value)
-  }
-
   if (key === 'language') {
     i18next.changeLanguage(value)
   }
@@ -1215,8 +1188,8 @@ ipcMain.on('save-setting', function (event, key, value) {
   // Enabling/disabling a break type changes what should be scheduled, so
   // re-plan immediately instead of waiting for the current cycle to finish.
   // When both types are now disabled this drops the planner into idle.
-  // Skip while paused or mid-break so we don't cancel an active break.
-  if ((key === 'microbreak' || key === 'break') && !breakPlanner.isPaused &&
+  // Skip while mid-break so we don't cancel an active break.
+  if ((key === 'microbreak' || key === 'break') &&
       breakPlanner.scheduler.reference !== 'finishMicrobreak' &&
       breakPlanner.scheduler.reference !== 'finishBreak') {
     breakPlanner.nextBreak()
@@ -1252,7 +1225,6 @@ ipcMain.handle('show-debug', (event) => {
   )
   const breaknumber = breakPlanner.breakNumber
   const postponesnumber = breakPlanner.postponesNumber
-  const doNotDisturb = breakPlanner.dndManager.isOnDnd
   let settingsFile = settings.path
   let logsFile = log.transports.file.getFile().path
   let imagesFolder = join(app.getPath('userData'), 'images')
@@ -1268,7 +1240,6 @@ ipcMain.handle('show-debug', (event) => {
     postponesnumber,
     settingsFile,
     logsFile,
-    doNotDisturb,
     imagesFolder
   ]
 })

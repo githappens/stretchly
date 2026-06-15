@@ -94,4 +94,27 @@ describe('breaksPlanner', function () {
       planner.scheduler.reference.should.equal('startBreak')
     })
   })
+
+  describe('BreaksPlanner (no managers, no pause)', function () {
+    it('does not construct natural/dnd/exclusion managers', () => {
+      planner = new BreaksPlanner(settings)
+      ;(planner.naturalBreaksManager === undefined).should.equal(true)
+      ;(planner.dndManager === undefined).should.equal(true)
+      ;(planner.appExclusionsManager === undefined).should.equal(true)
+    })
+
+    it('no longer exposes pause/resume', () => {
+      planner = new BreaksPlanner(settings)
+      ;(planner.pause === undefined).should.equal(true)
+      ;(planner.resume === undefined).should.equal(true)
+      ;(planner.isPaused === undefined).should.equal(true)
+    })
+
+    it('skipToMicrobreak schedules a startMicrobreak', () => {
+      planner = new BreaksPlanner(settings)
+      planner.nextBreak()
+      planner.skipToMicrobreak()
+      planner.scheduler.reference.should.equal('startMicrobreak')
+    })
+  })
 })
