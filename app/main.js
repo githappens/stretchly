@@ -14,8 +14,7 @@ import Store from 'electron-store'
 import humanizeDuration from 'humanize-duration'
 
 import {
-  canPostpone, canSkip, formatTimeRemaining,
-  insideWindowsStore, insideFlatpak, insideSnap, insideWindowsPortable
+  canPostpone, canSkip, formatTimeRemaining
 } from './utils/utils.js'
 import IdeasLoader from './utils/ideasLoader.js'
 import BreaksPlanner from './breaksPlanner.js'
@@ -67,20 +66,7 @@ let settings
 let nextIdea = null
 let danger = 0
 
-if (insideWindowsPortable()) {
-  const portableDataPath = join(process.env.PORTABLE_EXECUTABLE_DIR, 'Data')
-  if (!existsSync(portableDataPath)) {
-    mkdirSync(portableDataPath, { recursive: true })
-  }
-  app.setPath('userData', portableDataPath)
-}
-
 log.initialize({ preload: true })
-
-// https://stackoverflow.com/questions/65859634/notification-from-electron-shows-electron-app-electron/65863174#65863174
-if (process.platform === 'win32') {
-  app.setAppUserModelId('Stretchly')
-}
 
 const commandLineArguments = process.argv
   .slice(app.isPackaged ? 1 : 2)
@@ -148,14 +134,6 @@ async function initialize (cmd, isAppStart = true) {
             log.info('Stretchly: removing showBreakActionsInStrictMode')
           } else {
             log.info('Stretchly: not migrating showBreakActionsInStrictMode')
-          }
-        },
-        '1.18.2': store => {
-          if (insideFlatpak() || insideWindowsStore() || insideSnap()) {
-            if (!store.get('disableAppUpdateFeatures')) {
-              store.set('disableAppUpdateFeatures', true)
-              log.info('Stretchly: setting disableAppUpdateFeatures to true because we are in Flatpak/Windows Store/Snap build')
-            }
           }
         },
         '1.19.0': store => {
@@ -376,14 +354,9 @@ function getBlurredBackgroundWindowOptions () {
     return {}
   }
 
-  switch (process.platform) {
-    case 'darwin':
-      return {
-        vibrancy: 'hud',
-        visualEffectState: 'active'
-      }
-    default:
-      return {}
+  return {
+    vibrancy: 'hud',
+    visualEffectState: 'active'
   }
 }
 
@@ -469,23 +442,16 @@ function startMicrobreak () {
       alwaysOnTop: !showBreaksAsRegularWindows,
       hasShadow: false,
       title: 'Stretchly',
-      titleBarStyle: process.platform === 'darwin' ? (showBreaksAsRegularWindows ? 'default' : 'hidden') : undefined,
-      titleBarOverlay: process.platform === 'darwin' ? !showBreaksAsRegularWindows : undefined,
+      titleBarStyle: showBreaksAsRegularWindows ? 'default' : 'hidden',
+      titleBarOverlay: !showBreaksAsRegularWindows,
       webPreferences: {
         preload: join(__dirname, './microbreak-preload.mjs'),
         sandbox: false
       }
     }
 
-    if (settings.get('fullscreen') && process.platform !== 'darwin') {
-      windowOptions.width = displayManager.getDisplayWidth(localDisplayId)
-      windowOptions.height = displayManager.getDisplayHeight(localDisplayId)
-      windowOptions.x = displayManager.getDisplayX(localDisplayId, 0, true)
-      windowOptions.y = displayManager.getDisplayY(localDisplayId, 0, true)
-    } else if (!(settings.get('fullscreen') && process.platform === 'win32')) {
-      windowOptions.x = displayManager.getDisplayX(localDisplayId, windowOptions.width, false)
-      windowOptions.y = displayManager.getDisplayY(localDisplayId, windowOptions.height, false)
-    }
+    windowOptions.x = displayManager.getDisplayX(localDisplayId, windowOptions.width, false)
+    windowOptions.y = displayManager.getDisplayY(localDisplayId, windowOptions.height, false)
 
     let microbreakWinLocal = new BrowserWindow(windowOptions)
     // seems to help with multiple-displays problems
@@ -518,11 +484,6 @@ function startMicrobreak () {
       if (localDisplayId === emitOnId) {
         breakPlanner.emit('microbreakStarted', true)
         log.info('Stretchly: starting Mini break')
-      }
-      if (!settings.get('fullscreen') && process.platform !== 'darwin') {
-        setTimeout(() => {
-          microbreakWinLocal.center()
-        }, 0)
       }
     }
     ipcMain.on('mini-break-loaded', onMiniBreakLoaded)
@@ -643,23 +604,16 @@ function startBreak () {
       alwaysOnTop: !showBreaksAsRegularWindows,
       hasShadow: false,
       title: 'Stretchly',
-      titleBarStyle: process.platform === 'darwin' ? (showBreaksAsRegularWindows ? 'default' : 'hidden') : undefined,
-      titleBarOverlay: process.platform === 'darwin' ? !showBreaksAsRegularWindows : undefined,
+      titleBarStyle: showBreaksAsRegularWindows ? 'default' : 'hidden',
+      titleBarOverlay: !showBreaksAsRegularWindows,
       webPreferences: {
         preload: join(__dirname, './break-preload.mjs'),
         sandbox: false
       }
     }
 
-    if (settings.get('fullscreen') && process.platform !== 'darwin') {
-      windowOptions.width = displayManager.getDisplayWidth(localDisplayId)
-      windowOptions.height = displayManager.getDisplayHeight(localDisplayId)
-      windowOptions.x = displayManager.getDisplayX(localDisplayId, 0, true)
-      windowOptions.y = displayManager.getDisplayY(localDisplayId, 0, true)
-    } else if (!(settings.get('fullscreen') && process.platform === 'win32')) {
-      windowOptions.x = displayManager.getDisplayX(localDisplayId, windowOptions.width, false)
-      windowOptions.y = displayManager.getDisplayY(localDisplayId, windowOptions.height, false)
-    }
+    windowOptions.x = displayManager.getDisplayX(localDisplayId, windowOptions.width, false)
+    windowOptions.y = displayManager.getDisplayY(localDisplayId, windowOptions.height, false)
 
     let breakWinLocal = new BrowserWindow(windowOptions)
     // seems to help with multiple-displays problems
@@ -692,12 +646,6 @@ function startBreak () {
       if (localDisplayId === emitOnId) {
         breakPlanner.emit('breakStarted', true)
         log.info('Stretchly: starting Long break')
-      }
-
-      if (!settings.get('fullscreen') && process.platform !== 'darwin') {
-        setTimeout(() => {
-          breakWinLocal.center()
-        }, 0)
       }
     }
     ipcMain.on('long-break-loaded', onLongBreakLoaded)
@@ -1036,14 +984,9 @@ ipcMain.handle('show-debug', (event) => {
   )
   const breaknumber = breakPlanner.breakNumber
   const postponesnumber = breakPlanner.postponesNumber
-  let settingsFile = settings.path
-  let logsFile = log.transports.file.getFile().path
-  let imagesFolder = join(app.getPath('userData'), 'images')
-  if (insideWindowsStore()) {
-    settingsFile = settingsFile.replace('Roaming', 'Local\\Packages\\33881JanHovancik.stretchly_24fg4m0zq65je\\LocalCache\\Roaming')
-    logsFile = logsFile.replace('Roaming', 'Local\\Packages\\33881JanHovancik.stretchly_24fg4m0zq65je\\LocalCache\\Roaming')
-    imagesFolder = imagesFolder.replace('Roaming', 'Local\\Packages\\33881JanHovancik.stretchly_24fg4m0zq65je\\LocalCache\\Roaming')
-  }
+  const settingsFile = settings.path
+  const logsFile = log.transports.file.getFile().path
+  const imagesFolder = join(app.getPath('userData'), 'images')
   return [
     reference,
     timeleft,

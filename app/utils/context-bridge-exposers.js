@@ -36,9 +36,6 @@ function exposeRuntime () {
     node: () => process.versions.node,
     chrome: () => process.versions.chrome,
     electron: () => process.versions.electron,
-    windowsStore: () => utils.insideWindowsStore(),
-    snap: () => utils.insideSnap(),
-    windowsPortable: () => utils.insideWindowsPortable(),
     getSystemVersion: () => process.getSystemVersion()
   })
 }

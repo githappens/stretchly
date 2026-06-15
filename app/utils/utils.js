@@ -1,5 +1,3 @@
-import fs from 'node:fs'
-
 function formatTimeRemaining (milliseconds, locale, i18next, humanizeDuration) {
   if (locale === 'pt-BR') {
     locale = 'pt'
@@ -75,22 +73,6 @@ function shouldShowNotificationTitle (platform, systemVersion, semver) {
   return true
 }
 
-function insideFlatpak () {
-  return process.platform === 'linux' && fs.existsSync('/.flatpak-info')
-}
-
-function insideWindowsStore () {
-  return process.platform === 'win32' && !!process.windowsStore
-}
-
-function insideSnap () {
-  return process.platform === 'linux' && !!process.env.SNAP
-}
-
-function insideWindowsPortable () {
-  return process.platform === 'win32' && !!process.env.PORTABLE_EXECUTABLE_DIR
-}
-
 export {
   formatTimeRemaining,
   formatElapsedDuration,
@@ -100,9 +82,5 @@ export {
   canSkip,
   formatKeyboardShortcut,
   minutesRemaining,
-  shouldShowNotificationTitle,
-  insideFlatpak,
-  insideWindowsStore,
-  insideSnap,
-  insideWindowsPortable
+  shouldShowNotificationTitle
 }
