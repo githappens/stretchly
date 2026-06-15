@@ -169,13 +169,6 @@ window.onload = async (e) => {
     }
   })
 
-  document.querySelector('#language').value = settings.language
-  if (!eventsAttached) {
-    document.querySelector('#language').onchange = (event) => {
-      window.settings.saveSettings('language', event.target.value)
-    }
-  }
-
   document.querySelectorAll('input[type="range"]').forEach(async range => {
     const divisor = range.dataset.divisor
     const output = range.closest('div').querySelector('output')

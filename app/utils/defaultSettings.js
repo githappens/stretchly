@@ -36,7 +36,6 @@ export default {
   ideas: true,
   allScreens: true,
   useIdeasFromSettings: false,
-  language: 'en',
   posLatitude: 0.0,
   posLongitude: 0.0,
   silentNotifications: false,

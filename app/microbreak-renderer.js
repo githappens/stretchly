@@ -65,7 +65,7 @@ window.onload = async (event) => {
 
   let manualAwaiting = false
 
-  const locale = await window.settings.get('language')
+  const locale = 'en'
 
   manualFinishElement.onclick = runOnce(() => window.breaks.finishBreak(manualAwaiting))
 

@@ -275,7 +275,7 @@ function startI18next () {
   i18next
     .use(Backend)
     .init({
-      lng: settings.get('language'),
+      lng: 'en',
       fallbackLng: 'en',
       debug: !app.isPackaged,
       backend: {
@@ -921,10 +921,6 @@ ipcMain.on('finish-long-break', function (event, shouldPlaySound, manualAwaiting
 })
 
 ipcMain.on('save-setting', function (event, key, value) {
-  if (key === 'language') {
-    i18next.changeLanguage(value)
-  }
-
   if (key === 'themeSource') {
     nativeTheme.themeSource = value
   }
@@ -979,7 +975,7 @@ ipcMain.on('play-sound', (event, sound) => {
 ipcMain.handle('show-debug', (event) => {
   const reference = breakPlanner.scheduler.reference
   const timeleft = formatTimeRemaining(
-    breakPlanner.scheduler.timeLeft, settings.get('language'),
+    breakPlanner.scheduler.timeLeft, 'en',
     i18next, humanizeDuration
   )
   const breaknumber = breakPlanner.breakNumber
