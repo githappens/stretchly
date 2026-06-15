@@ -22,10 +22,11 @@ cd "$(dirname "$0")/.."
 target="build/node_modules"
 
 if [ -L node_modules ]; then
-  # Already the symlink we want — nothing to do.
-  [ "$(readlink node_modules)" = "$target" ] && exit 0
-  # Wrong or broken symlink — drop it.
-  rm -f node_modules
+  # A symlink already. Drop it only if it points somewhere other than $target;
+  # a correct link falls through to the file:-dep fix-up below.
+  if [ "$(readlink node_modules)" != "$target" ]; then
+    rm -f node_modules
+  fi
 elif [ -d node_modules ]; then
   # A real directory (e.g. npm ci just recreated it) — move it under build/.
   mkdir -p build
@@ -33,9 +34,25 @@ elif [ -d node_modules ]; then
   mv node_modules "$target"
 fi
 
-# node_modules is now absent. Link it only if there is a tree to point at;
-# otherwise leave it for `npm ci` to create (which this will relocate next run).
-if [ -d "$target" ]; then
+# Link node_modules -> $target when it is absent and there is a tree to point
+# at; otherwise leave it for `npm ci` to create (which this relocates next run).
+if [ ! -e node_modules ] && [ -d "$target" ]; then
   ln -s "$target" node_modules
   echo "node_modules -> $target (kept under the Santa-allowed build/ tree)"
+fi
+
+# Materialize file: dependencies as real directories. npm installs
+# `file:native/strict-lock` as a symlink whose relative target
+# (../native/strict-lock) is computed against the LOGICAL project-root
+# node_modules. Once the real tree lives at build/node_modules that target
+# dangles (build/native/strict-lock), so `require('strict-lock')` fails in dev
+# and electron-builder packs the addon under /native/strict-lock instead of
+# /node_modules/strict-lock — silently disabling the Cmd+Tab lockdown. A real
+# copy resolves everywhere and packs at node_modules/strict-lock. The addon is
+# N-API, so the prebuilt .node is portable. Idempotent: only fires while the
+# entry is still npm's symlink.
+if [ -L "$target/strict-lock" ]; then
+  rm -f "$target/strict-lock"
+  cp -R native/strict-lock "$target/strict-lock"
+  echo "materialized file: dependency strict-lock as a real directory under $target"
 fi
