@@ -39,7 +39,6 @@ export default {
   useIdeasFromSettings: false,
   language: 'en',
   notifyNewVersion: true,
-  isFirstRun: true,
   posLatitude: 0.0,
   posLongitude: 0.0,
   silentNotifications: false,

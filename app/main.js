@@ -3,7 +3,7 @@ import {
   screen, shell, dialog, globalShortcut
 } from 'electron'
 import { EventEmitter } from 'node:events'
-import { readFile, writeFile, existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'path'
 import { resolveLocalImage } from './utils/imageResolver.js'
 import { fileURLToPath } from 'url'
@@ -12,7 +12,6 @@ import Backend from 'i18next-fs-backend'
 import log from 'electron-log/main.js'
 import Store from 'electron-store'
 import humanizeDuration from 'humanize-duration'
-import { DateTime } from 'luxon'
 
 import {
   canPostpone, canSkip, formatTimeRemaining,
@@ -64,10 +63,6 @@ let processWin = null
 let microbreakWins = null
 let breakWins = null
 let preferencesWin = null
-let welcomeWin = null
-let contributorPreferencesWin = null
-let syncPreferencesWin = null
-let myStretchlyWin = null
 let settings
 let nextIdea = null
 let danger = 0
@@ -89,8 +84,7 @@ if (process.platform === 'win32') {
 }
 
 const global = {
-  isNewVersion: false,
-  isContributor: false
+  isNewVersion: false
 }
 
 ipcMain.on('set-global-value', (event, name, value) => {
@@ -281,29 +275,10 @@ async function initialize (cmd, isAppStart = true) {
 
   startI18next()
   startProcessWin()
-  createWelcomeWindow()
   nativeTheme.themeSource = settings.get('themeSource')
 
-  readFile(join(app.getPath('userData'), 'stamp'), 'utf8', (err, data) => {
-    if (err) {
-      return
-    }
-    if (DateTime.fromISO(data).month === DateTime.now().month) {
-      global.isContributor = true
-      log.info('Stretchly: Thanks for your contributions!')
-      if (preferencesWin) {
-        preferencesWin.webContents.send('enable-contributor-preferences')
-      }
-    }
-  })
   if (preferencesWin) {
     preferencesWin.webContents.send('renderSettings', settings.store)
-  }
-  if (welcomeWin) {
-    welcomeWin.webContents.send('renderSettings', settings.store)
-  }
-  if (contributorPreferencesWin) {
-    contributorPreferencesWin.webContents.send('renderSettings', settings.store)
   }
   globalShortcut.unregisterAll()
 
@@ -350,9 +325,6 @@ function startI18next () {
 }
 
 i18next.on('languageChanged', () => {
-  if (welcomeWin) {
-    welcomeWin.webContents.send('translate')
-  }
   if (preferencesWin) {
     preferencesWin.webContents.send('translate')
   }
@@ -401,96 +373,6 @@ function startProcessWin () {
   processWin.webContents.loadURL(modalPath)
   processWin.webContents.once('ready-to-show', () => {
     planVersionCheck()
-  })
-}
-
-function createWelcomeWindow (isAppStart = true) {
-  if (settings.get('isFirstRun') && isAppStart) {
-    const modalPath = 'file://' + join(__dirname, '/welcome.html')
-    welcomeWin = new BrowserWindow({
-      x: displayManager.getDisplayX(-1, 1000),
-      y: displayManager.getDisplayY(-1, 750),
-      width: 1000,
-      height: 750,
-      show: false,
-      autoHideMenuBar: true,
-      icon: windowIconPath(),
-      backgroundColor: 'EDEDED',
-      webPreferences: {
-        preload: join(__dirname, './welcome-preload.mjs'),
-        sandbox: false
-      }
-    })
-    welcomeWin.webContents.loadURL(modalPath)
-    welcomeWin.once('ready-to-show', () => {
-      welcomeWin.center()
-      welcomeWin.show()
-    })
-    welcomeWin.once('closed', () => {
-      welcomeWin = null
-    })
-  }
-}
-
-function createContributorSettingsWindow () {
-  if (contributorPreferencesWin) {
-    contributorPreferencesWin.show()
-    return
-  }
-  const modalPath = 'file://' + join(__dirname, '/contributor-preferences.html')
-  contributorPreferencesWin = new BrowserWindow({
-    x: displayManager.getDisplayX(-1, 735),
-    y: displayManager.getDisplayY(),
-    width: 735,
-    show: false,
-    autoHideMenuBar: true,
-    icon: windowIconPath(),
-    backgroundColor: 'EDEDED',
-    webPreferences: {
-      preload: join(__dirname, './contributor-preferences-preload.mjs'),
-      sandbox: false
-    }
-  })
-  contributorPreferencesWin.webContents.loadURL(modalPath)
-  contributorPreferencesWin.once('ready-to-show', () => {
-    contributorPreferencesWin.center()
-    contributorPreferencesWin.show()
-  })
-  contributorPreferencesWin.once('closed', () => {
-    contributorPreferencesWin = null
-  })
-}
-
-function createSyncPreferencesWindow () {
-  if (syncPreferencesWin) {
-    syncPreferencesWin.show()
-    return
-  }
-
-  const syncPreferencesUrl = 'https://my.stretchly.net/app/v1/sync'
-  syncPreferencesWin = new BrowserWindow({
-    show: false,
-    autoHideMenuBar: true,
-    width: 1000,
-    height: 700,
-    icon: windowIconPath(),
-    x: displayManager.getDisplayX(),
-    y: displayManager.getDisplayY(),
-    backgroundColor: 'whitesmoke',
-    webPreferences: {
-      preload: join(__dirname, './electron-bridge.mjs'),
-      sandbox: false
-    }
-  })
-  syncPreferencesWin.webContents.loadURL(syncPreferencesUrl)
-
-  syncPreferencesWin.once('closed', () => {
-    syncPreferencesWin = null
-  })
-
-  syncPreferencesWin.once('ready-to-show', () => {
-    syncPreferencesWin.center()
-    syncPreferencesWin.show()
   })
 }
 
@@ -1173,7 +1055,7 @@ ipcMain.on('restore-defaults', (event) => {
   dialog.showMessageBox(dialogOpts).then(async (returnValue) => {
     if (returnValue.response === 0) {
       log.info('Stretchly: restoring default settings')
-      settings.store = Object.assign(defaultSettings, { isFirstRun: false, __internal__: settings.get('__internal__') })
+      settings.store = Object.assign(defaultSettings, { __internal__: settings.get('__internal__') })
       initialize(command, false)
       event.sender.reload()
     }
@@ -1215,65 +1097,8 @@ ipcMain.on('open-preferences', function (event) {
   createPreferencesWindow()
 })
 
-ipcMain.on('set-contributor', function (event) {
-  const dir = app.getPath('userData')
-  const contributorStampFile = `${dir}/stamp`
-  writeFile(contributorStampFile, DateTime.now().toString(), () => { })
-  global.isContributor = true
-  log.info('Stretchly: Logged in. Thanks for your contributions!')
-  if (preferencesWin) {
-    preferencesWin.webContents.send('enable-contributor-preferences')
-  }
-})
-
-ipcMain.on('open-contributor-preferences', function () {
-  createContributorSettingsWindow()
-})
-
-ipcMain.on('open-contributor-auth', function (event, provider) {
-  if (myStretchlyWin) {
-    myStretchlyWin.show()
-    return
-  }
-  const myStretchlyUrl = `https://my.stretchly.net/app/v1?provider=${provider}`
-  myStretchlyWin = new BrowserWindow({
-    autoHideMenuBar: true,
-    show: false,
-    width: 1000,
-    height: 700,
-    icon: windowIconPath(),
-    x: displayManager.getDisplayX(),
-    y: displayManager.getDisplayY(),
-    backgroundColor: 'whitesmoke',
-    webPreferences: {
-      preload: join(__dirname, './electron-bridge.mjs'),
-      sandbox: false
-    }
-  })
-  myStretchlyWin.webContents.loadURL(myStretchlyUrl)
-
-  myStretchlyWin.once('closed', () => {
-    myStretchlyWin = null
-  })
-
-  myStretchlyWin.once('ready-to-show', () => {
-    myStretchlyWin.center()
-    myStretchlyWin.show()
-  })
-})
-
-ipcMain.on('open-sync-preferences', () => {
-  createSyncPreferencesWindow()
-})
-
 ipcMain.handle('current-settings', (event) => {
   return settings.store
-})
-
-ipcMain.handle('restore-remote-settings', (event, remoteSettings) => {
-  log.info('Stretchly: restoring remote settings')
-  settings.store = remoteSettings
-  initialize(command, false)
 })
 
 ipcMain.handle('i18next-translate', (event, key, options) => {

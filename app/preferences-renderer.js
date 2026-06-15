@@ -112,37 +112,6 @@ window.onload = async (e) => {
     setWindowHeight()
   })
 
-  window.stretchly.onEnableContributorPreferences(() => {
-    showContributorPreferencesButton()
-  })
-
-  const showContributorPreferencesButton = () => {
-    document.querySelectorAll('.contributor').forEach((item) => {
-      item.classList.remove('hidden')
-    })
-    document.querySelectorAll('.become').forEach((item) => {
-      item.classList.add('hidden')
-    })
-    document.querySelectorAll('.authenticate').forEach((item) => {
-      item.classList.add('hidden')
-    })
-    setWindowHeight()
-  }
-
-  if (await window.global.getValue('isContributor')) {
-    showContributorPreferencesButton()
-  }
-
-  document.querySelector('[name="contributorPreferences"]').onclick = (event) => {
-    event.preventDefault()
-    window.stretchly.openContributorPreferences()
-  }
-
-  document.querySelector('[name="syncPreferences"]').onclick = (event) => {
-    event.preventDefault()
-    window.stretchly.openSyncPreferences()
-  }
-
   document.querySelector('.debug button').onclick = async (event) => {
     event.preventDefault()
     const toCopy = document.querySelector('#to-copy')
@@ -262,27 +231,6 @@ window.onload = async (e) => {
       } else {
         window.electronApi.openExternal(event.target.href)
       }
-    }
-  })
-
-  document.querySelector('[name="becomeContributor"]').onclick = () => {
-    window.electronApi.openExternal('https://hovancik.net/stretchly/sponsor')
-  }
-
-  document.querySelector('[name="alreadyContributor"]').onclick = () => {
-    document.querySelectorAll('.become').forEach((item) => {
-      item.classList.add('hidden')
-    })
-    document.querySelectorAll('.authenticate').forEach((item) => {
-      item.classList.remove('hidden')
-    })
-    setWindowHeight()
-  }
-
-  document.querySelectorAll('.authenticate a').forEach((button) => {
-    button.onclick = (event) => {
-      event.preventDefault()
-      window.stretchly.openContributorAuth(button.dataset.provider)
     }
   })
 
