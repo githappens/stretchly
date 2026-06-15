@@ -1,4 +1,3 @@
-import { UntilMorning } from './untilMorning.js'
 import log from 'electron-log/main.js'
 
 const allOptions = {
@@ -13,24 +12,6 @@ const allOptions = {
     short: '-t',
     description: 'Specify text for next break (Long break only)',
     withValue: true
-  },
-  noskip: {
-    long: '--noskip',
-    short: '-n',
-    description: 'Do not skip directly to this break (Long or Mini)',
-    withValue: false
-  },
-  wait: {
-    long: '--wait',
-    short: '-w',
-    description: 'Specify an interval to wait before skipping to this break (Long or Mini) [HHhMMm|HHh|MMm|MM]',
-    withValue: true
-  },
-  duration: {
-    long: '--duration',
-    short: '-d',
-    description: 'Specify duration for pausing breaks (Pause only) [indefinitely|until-morning|HHhMMm|HHh|MMm|MM]',
-    withValue: true
   }
 }
 
@@ -44,26 +25,13 @@ const allCommands = {
   logs: {
     description: 'Show location of logs file'
   },
-  reset: {
-    description: 'Reset breaks'
-  },
-  pause: {
-    description: 'Pause breaks',
-    options: [allOptions.duration]
-  },
-  resume: {
-    description: 'Resume from a pause'
-  },
-  toggle: {
-    description: 'Pause/unpause breaks'
-  },
   mini: {
-    description: 'Skip to the Mini break, customize it',
-    options: [allOptions.title, allOptions.noskip, allOptions.wait]
+    description: 'Show a Mini break, customize it',
+    options: [allOptions.title]
   },
   long: {
-    description: 'Skip to the Long break, customize it',
-    options: [allOptions.text, allOptions.title, allOptions.noskip, allOptions.wait]
+    description: 'Show a Long break, customize it',
+    options: [allOptions.text, allOptions.title]
   },
   preferences: {
     description: 'Open Preferences window'
@@ -71,36 +39,12 @@ const allCommands = {
 }
 
 const allExamples = [{
-  cmd: 'stretchly pause',
-  description: 'Pause breaks indefinitely'
-},
-{
-  cmd: 'stretchly pause -d 60',
-  description: 'Pause breaks for one hour'
-},
-{
-  cmd: 'stretchly pause -d 1h',
-  description: 'Pause breaks for one hour'
-},
-{
-  cmd: 'stretchly pause -d 1h20m',
-  description: 'Pause breaks for one hour and twenty minutes'
-},
-{
   cmd: 'stretchly mini -T "Stretch up!"',
-  description: 'Start a Mini break, with the title "Stretch up!"'
-},
-{
-  cmd: 'stretchly long -T "Stretch up!" --noskip',
-  description: 'Set the next break\'s title to "Stretch up!"'
+  description: 'Show a Mini break, with the title "Stretch up!"'
 },
 {
   cmd: 'stretchly long -T "Stretch up!" -t "Go stretch!"',
-  description: 'Start a long break, with the title "Stretch up!" and text "Go stretch!"'
-},
-{
-  cmd: 'stretchly long -w 20m -T "Stretch up!"',
-  description: 'Wait 20 minutes, then start a long break with the title set to "Stretch up!"'
+  description: 'Show a Long break, with the title "Stretch up!" and text "Go stretch!"'
 },
 {
   cmd: 'stretchly preferences',
@@ -129,7 +73,7 @@ class Command {
     this.command = args[0]
 
     if (this.command === undefined) {
-      this.command = 'help'
+      this.command = 'preferences'
     }
 
     if (!this.supported[this.command]) {
@@ -191,31 +135,6 @@ class Command {
           log.info(`Stretchly${this.isFirstInstance ? '' : ' 2'}: forwarding command '${this.command}' to the main instance`)
         }
     }
-  }
-
-  durationToMs (settings) {
-    if (!this.options.duration) {
-      return 1
-    }
-
-    switch (this.options.duration) {
-      case 'indefinitely':
-        return 1
-
-      case 'until-morning':
-        return new UntilMorning(settings).msToSunrise()
-
-      default:
-        return parseDuration(this.options.duration)
-    }
-  }
-
-  waitToMs () {
-    if (!this.options.wait) {
-      return 0
-    }
-
-    return parseDuration(this.options.wait)
   }
 
   checkInMain () {
@@ -289,26 +208,5 @@ class Command {
     console.log([this.cmdHelp(), this.optionsHelp(), this.examplesHelp()].join(''))
   }
 }
-
-// this function should return -1 if duration can't be parsed
-function parseDuration (input) {
-  if (input.match(/^\d+$/) != null) {
-    const mins = Number.parseInt(input)
-    const result = mins * minToMs
-    return result > 0 ? result : -1
-  }
-
-  const parts = input.toLowerCase().match(/^(?:(\d+)h)?(?:(\d+)m)?$/)
-  if (parts === null || parts[0] === '') {
-    return -1
-  }
-
-  const hours = parts[1] ? Number.parseInt(parts[1]) : 0
-  const minutes = parts[2] ? Number.parseInt(parts[2]) : 0
-  const result = hours * minToMs * 60 + minutes * minToMs
-  return isNaN(result) || result <= 0 ? -1 : result
-}
-
-const minToMs = 60000
 
 export default Command
