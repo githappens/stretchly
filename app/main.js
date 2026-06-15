@@ -1,6 +1,6 @@
 import {
   app, nativeTheme, BrowserWindow, Menu, ipcMain,
-  screen, shell, dialog, globalShortcut, Tray
+  screen, shell, dialog, globalShortcut
 } from 'electron'
 import { EventEmitter } from 'node:events'
 import { readFile, writeFile, existsSync, mkdirSync } from 'node:fs'
@@ -16,16 +16,14 @@ import { DateTime } from 'luxon'
 
 import {
   canPostpone, canSkip, formatTimeRemaining,
-  minutesRemaining, insideWindowsStore, insideFlatpak, insideSnap, insideWindowsPortable
+  insideWindowsStore, insideFlatpak, insideSnap, insideWindowsPortable
 } from './utils/utils.js'
 import IdeasLoader from './utils/ideasLoader.js'
 import BreaksPlanner from './breaksPlanner.js'
 import AppIcon from './utils/appIcon.js'
-import { UntilMorning } from './utils/untilMorning.js'
 import AutostartManager from './utils/autostartManager.js'
 import Command from './utils/commands.js'
 import defaultSettings from './utils/defaultSettings.js'
-import StatusMessages from './utils/statusMessages.js'
 import DisplayManager from './utils/displayManager.js'
 import { engageBreakLock, releaseBreakLock } from './utils/breakLock.js'
 
@@ -63,7 +61,6 @@ process.on('uncaughtException', (err, _) => {
 let microbreakIdeas
 let breakIdeas
 let breakPlanner
-let appIcon = null
 let autostartManager = null
 let displayManager = null
 let processWin = null
@@ -78,9 +75,6 @@ let settings
 let nextIdea = null
 let danger = 0
 let updateChecker
-let currentTrayIconPath = null
-let currentTrayMenuTemplate = null
-let trayUpdateIntervalObj = null
 
 if (insideWindowsPortable()) {
   const portableDataPath = join(process.env.PORTABLE_EXECUTABLE_DIR, 'Data')
@@ -280,9 +274,6 @@ async function initialize (cmd, isAppStart = true) {
       finishBreak(shouldPlaySound, shouldPlanNext)
     })
     breakPlanner.on('resumeBreaks', () => { resumeBreaks() })
-    breakPlanner.on('updateToolTip', function () {
-      updateTray()
-    })
   } else {
     breakPlanner.clear()
     breakPlanner.appExclusionsManager.reinitialize(settings)
@@ -342,7 +333,6 @@ async function initialize (cmd, isAppStart = true) {
       if (preferencesWin) {
         preferencesWin.webContents.send('enable-contributor-preferences')
       }
-      updateTray()
     }
   })
   if (preferencesWin) {
@@ -403,7 +393,6 @@ i18next.on('languageChanged', () => {
   if (preferencesWin) {
     preferencesWin.webContents.send('translate')
   }
-  updateTray()
   loadIdeas()
 })
 
@@ -423,35 +412,6 @@ function closeWindows (windowArray) {
     window.destroy()
   }
   return null
-}
-
-function trayIconUseDarkColors () {
-  const source = settings.get('trayIconThemeSource')
-  if (source === 'light') return false
-  if (source === 'dark') return true
-  return nativeTheme.shouldUseDarkColors
-}
-
-function trayIconPath () {
-  const useDarkColors = trayIconUseDarkColors()
-  const params = {
-    paused:
-      breakPlanner.isPaused ||
-      breakPlanner.dndManager.isOnDnd ||
-      breakPlanner.naturalBreaksManager.isSchedulerCleared ||
-      breakPlanner.appExclusionsManager.isSchedulerCleared,
-    monochrome: settings.get('useMonochromeTrayIcon'),
-    inverted: useDarkColors,
-    darkMode: useDarkColors,
-    platform: process.platform,
-    trayIconStyle: settings.get('trayIconStyle'),
-    timeToBreak: minutesRemaining(breakPlanner.timeToNextBreak),
-    percentage: breakPlanner.progressPercentage,
-    reference: breakPlanner.scheduler.reference
-  }
-  const trayIconFileName = new AppIcon(params).trayIconFileName
-  const pathToTrayIcon = join(__dirname, '/images/app-icons/', trayIconFileName)
-  return pathToTrayIcon
 }
 
 function windowIconPath () {
@@ -599,14 +559,12 @@ function startMicrobreakNotification () {
   showNotification(i18next.t('main.microbreakIn', { seconds: settings.get('microbreakNotificationInterval') / 1000 }))
   log.info('Stretchly: showing Mini break notification')
   breakPlanner.nextBreakAfterNotification()
-  updateTray()
 }
 
 function startBreakNotification () {
   showNotification(i18next.t('main.breakIn', { seconds: settings.get('breakNotificationInterval') / 1000 }))
   log.info('Stretchly: showing Long break notification')
   breakPlanner.nextBreakAfterNotification()
-  updateTray()
 }
 
 function getBlurredBackgroundWindowOptions () {
@@ -762,7 +720,6 @@ function startMicrobreak () {
           microbreakWinLocal.center()
         }, 0)
       }
-      updateTray()
     }
     ipcMain.on('mini-break-loaded', onMiniBreakLoaded)
 
@@ -938,7 +895,6 @@ function startBreak () {
           breakWinLocal.center()
         }, 0)
       }
-      updateTray()
     }
     ipcMain.on('long-break-loaded', onLongBreakLoaded)
 
@@ -1059,7 +1015,6 @@ function postponeMicrobreak () {
   microbreakWins = breakComplete(false, microbreakWins, 'mini')
   breakPlanner.postponeCurrentBreak()
   log.info('Stretchly: postponing Mini break')
-  updateTray()
 }
 
 function postponeBreak () {
@@ -1067,7 +1022,6 @@ function postponeBreak () {
   breakWins = breakComplete(false, breakWins, 'long')
   breakPlanner.postponeCurrentBreak()
   log.info('Stretchly: postponing Long break')
-  updateTray()
 }
 
 function skipToMicrobreak (delay) {
@@ -1086,7 +1040,6 @@ function skipToMicrobreak (delay) {
     breakPlanner.skipToMicrobreak()
     log.info('Stretchly: skipping to Mini break')
   }
-  updateTray()
 }
 
 function skipToBreak (delay) {
@@ -1105,21 +1058,6 @@ function skipToBreak (delay) {
     breakPlanner.skipToBreak()
     log.info('Stretchly: skipping to Long break')
   }
-  updateTray()
-}
-
-function resetBreaks () {
-  if (microbreakWins) {
-    microbreakWins = breakComplete(false, microbreakWins)
-  }
-  if (breakWins) {
-    breakWins = breakComplete(false, breakWins)
-  }
-  danger = 0
-  log.info(`Stretchly: danger reset to ${danger}`)
-  breakPlanner.reset()
-  log.info('Stretchly: resetting breaks')
-  updateTray()
 }
 
 function calculateBackgroundColor (color) {
@@ -1157,20 +1095,6 @@ function loadIdeas () {
   microbreakIdeas = new IdeasLoader(miniBreakIdeasData).ideas()
 }
 
-function pauseBreaks (milliseconds) {
-  if (microbreakWins) {
-    increaseDanger(1)
-    finishMicrobreak(false)
-  }
-  if (breakWins) {
-    increaseDanger(2)
-    finishBreak(false)
-  }
-  breakPlanner.pause(milliseconds)
-  log.info(`Stretchly: pausing breaks for ${milliseconds}ms`)
-  updateTray()
-}
-
 function resumeBreaks (notify = true) {
   if (breakPlanner.dndManager.isOnDnd) {
     log.info('Stretchly: not resuming breaks because in Do Not Disturb')
@@ -1181,7 +1105,6 @@ function resumeBreaks (notify = true) {
       showNotification(i18next.t('main.resumingBreaks'))
     }
   }
-  updateTray()
 }
 
 function createPreferencesWindow () {
@@ -1218,224 +1141,6 @@ function createPreferencesWindow () {
     preferencesWin = null
     if (!microbreakWins && !breakWins) app.quit()
   })
-}
-
-function updateTray () {
-  if (process.platform === 'darwin') {
-    if (app.dock.isVisible) {
-      app.dock.hide()
-    }
-  }
-
-  if (!appIcon && !settings.get('showTrayIcon')) {
-    return
-  }
-
-  if (settings.get('showTrayIcon')) {
-    if (!appIcon) {
-      appIcon = new Tray(trayIconPath())
-      appIcon.on('double-click', () => {
-        createPreferencesWindow()
-      })
-      appIcon.on('click', () => {
-        appIcon.popUpContextMenu(Menu.buildFromTemplate(currentTrayMenuTemplate))
-      })
-    }
-    if (!trayUpdateIntervalObj) {
-      trayUpdateIntervalObj = setInterval(updateTray, 10000)
-    }
-
-    updateToolTip()
-
-    const newTrayIconPath = trayIconPath()
-    if (newTrayIconPath !== currentTrayIconPath) {
-      appIcon.setImage(newTrayIconPath)
-      currentTrayIconPath = newTrayIconPath
-    }
-
-    const newTrayMenuTemplate = getTrayMenuTemplate()
-    if (JSON.stringify(newTrayMenuTemplate) !== JSON.stringify(currentTrayMenuTemplate)) {
-      const trayMenu = Menu.buildFromTemplate(newTrayMenuTemplate)
-      appIcon.setContextMenu(trayMenu)
-      currentTrayMenuTemplate = newTrayMenuTemplate
-    }
-  }
-}
-
-function getTrayMenuTemplate () {
-  const trayMenu = []
-
-  if (!settings.get('disableAppUpdateFeatures') && global.isNewVersion) {
-    trayMenu.push({
-      label: i18next.t('main.downloadLatestVersion'),
-      click: function () {
-        shell.openExternal('https://hovancik.net/stretchly/downloads')
-      }
-    }, {
-      type: 'separator'
-    })
-  }
-
-  const statusMessage = new StatusMessages({
-    breakPlanner,
-    settings,
-    i18next,
-    humanizeDuration
-  }).trayMessage
-
-  if (statusMessage !== '') {
-    const messages = statusMessage.split('\n')
-    for (const index in messages) {
-      trayMenu.push({
-        label: messages[index],
-        enabled: false
-      })
-    }
-
-    trayMenu.push({
-      type: 'separator'
-    })
-  }
-
-  if ((breakPlanner.scheduler.reference === 'finishMicrobreak' && settings.get('microbreakStrictMode') &&
-        !settings.get('showTrayMenuInStrictMode')) ||
-      (breakPlanner.scheduler.reference === 'finishBreak' && settings.get('breakStrictMode') &&
-      !settings.get('showTrayMenuInStrictMode'))
-  ) {
-    // empty menu, we are in strict mode
-    return trayMenu
-  }
-
-  if (!(breakPlanner.isPaused || breakPlanner.dndManager.isOnDnd || breakPlanner.appExclusionsManager.isSchedulerCleared)) {
-    let submenu = []
-    if (settings.get('microbreak')) {
-      submenu = submenu.concat([{
-        label: i18next.t('main.toMicrobreak'),
-        click: () => skipToMicrobreak()
-      }])
-    }
-    if (settings.get('break')) {
-      submenu = submenu.concat([{
-        label: i18next.t('main.toBreak'),
-        click: () => skipToBreak()
-      }])
-    }
-    if (settings.get('break') || settings.get('microbreak')) {
-      trayMenu.push({
-        label: i18next.t('main.skipToTheNext'),
-        submenu
-      })
-    }
-  }
-
-  if (breakPlanner.isPaused) {
-    trayMenu.push({
-      label: i18next.t('main.resume'),
-      click: function () {
-        resumeBreaks(false)
-        updateTray()
-      }
-    })
-  } else if (!(breakPlanner.dndManager.isOnDnd || breakPlanner.appExclusionsManager.isSchedulerCleared)) {
-    trayMenu.push({
-      label: i18next.t('main.pause'),
-      submenu: [
-        {
-          label: i18next.t('utils.minutes', { count: 30 }),
-          accelerator: settings.get('pauseBreaksFor30MinutesShortcut') || null,
-          click: function () {
-            pauseBreaks(1800 * 1000)
-          }
-        }, {
-          label: i18next.t('main.forHour'),
-          accelerator: settings.get('pauseBreaksFor1HourShortcut') || null,
-          click: function () {
-            pauseBreaks(3600 * 1000)
-          }
-        }, {
-          label: i18next.t('main.for2Hours'),
-          accelerator: settings.get('pauseBreaksFor2HoursShortcut') || null,
-          click: function () {
-            pauseBreaks(3600 * 2 * 1000)
-          }
-        }, {
-          label: i18next.t('main.for5Hours'),
-          accelerator: settings.get('pauseBreaksFor5HoursShortcut') || null,
-          click: function () {
-            pauseBreaks(3600 * 5 * 1000)
-          }
-        }, {
-          label: i18next.t('main.untilMorning'),
-          accelerator: settings.get('pauseBreaksUntilMorningShortcut') || null,
-          click: function () {
-            const untilMorning = new UntilMorning(settings).msToSunrise()
-            pauseBreaks(untilMorning)
-          }
-        }, {
-          type: 'separator'
-        }, {
-          label: i18next.t('main.indefinitely'),
-          click: function () {
-            pauseBreaks(1)
-          }
-        }
-      ]
-    }, {
-      label: i18next.t('main.resetBreaks'),
-      click: resetBreaks
-    })
-  }
-
-  trayMenu.push({
-    type: 'separator'
-  }, {
-    label: i18next.t('main.preferences'),
-    click: function () {
-      createPreferencesWindow()
-    }
-  })
-
-  if (global.isContributor) {
-    trayMenu.push({
-      label: i18next.t('main.contributorPreferences'),
-      click: function () {
-        createContributorSettingsWindow()
-      }
-    }, {
-      label: i18next.t('main.syncPreferences'),
-      click: function () {
-        createSyncPreferencesWindow()
-      }
-    })
-  }
-
-  trayMenu.push({
-    type: 'separator'
-  }, {
-    label: i18next.t('main.quitStretchly'),
-    role: 'quit',
-    click: function () {
-      app.quit()
-    }
-  })
-
-  return trayMenu
-}
-
-function updateToolTip () {
-  let trayMessage = i18next.t('main.toolTipHeader')
-  const message = new StatusMessages({
-    breakPlanner,
-    settings,
-    i18next,
-    humanizeDuration
-  }).trayMessage
-  if (message !== '') {
-    trayMessage += '\n\n' + message
-  }
-  if (appIcon) {
-    appIcon.setToolTip(trayMessage)
-  }
 }
 
 function showNotification (text) {
@@ -1500,18 +1205,6 @@ ipcMain.on('save-setting', function (event, key, value) {
     settings.set('miniBreakColor', value)
   }
 
-  if (key === 'showTrayIcon') {
-    settings.set('showTrayIcon', value)
-    if (value) {
-      updateTray()
-    } else {
-      clearInterval(trayUpdateIntervalObj)
-      trayUpdateIntervalObj = null
-      appIcon.destroy()
-      appIcon = null
-    }
-  }
-
   if (key === 'openAtLogin') {
     autostartManager.setAutostartEnabled(value)
   }
@@ -1532,12 +1225,6 @@ ipcMain.on('save-setting', function (event, key, value) {
       breakPlanner.scheduler.reference !== 'finishBreak') {
     breakPlanner.nextBreak()
   }
-
-  updateTray()
-})
-
-ipcMain.on('update-tray', function (event) {
-  updateTray()
 })
 
 ipcMain.on('restore-defaults', (event) => {
@@ -1603,7 +1290,6 @@ ipcMain.on('set-contributor', function (event) {
   if (preferencesWin) {
     preferencesWin.webContents.send('enable-contributor-preferences')
   }
-  updateTray()
 })
 
 ipcMain.on('open-contributor-preferences', function () {
