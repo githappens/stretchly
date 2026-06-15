@@ -20,7 +20,6 @@ import {
 } from './utils/utils.js'
 import IdeasLoader from './utils/ideasLoader.js'
 import BreaksPlanner from './breaksPlanner.js'
-import AutostartManager from './utils/autostartManager.js'
 import Command from './utils/commands.js'
 import defaultSettings from './utils/defaultSettings.js'
 import DisplayManager from './utils/displayManager.js'
@@ -60,7 +59,6 @@ process.on('uncaughtException', (err, _) => {
 let microbreakIdeas
 let breakIdeas
 let breakPlanner
-let autostartManager = null
 let displayManager = null
 let processWin = null
 let microbreakWins = null
@@ -132,10 +130,6 @@ app.on('before-quit', (event) => {
     event.preventDefault()
   } else {
     globalShortcut.unregisterAll()
-    // Clean up D-Bus connections
-    if (autostartManager) {
-      autostartManager.disconnect()
-    }
   }
 })
 
@@ -274,25 +268,6 @@ async function initialize (cmd, isAppStart = true) {
     })
   }
 
-  autostartManager = new AutostartManager({
-    app,
-    settings
-  })
-
-  if (!settings.get('_migratedOpenAtLogin')) {
-    // one time migration with 1.20 or after
-    settings.set('openAtLogin', await autostartManager.autoLaunchStatus())
-    settings.set('_migratedOpenAtLogin', true)
-    log.info('Stretchly: Migrated to openAtLogin')
-  }
-
-  const currentAutostartValue = await autostartManager.autoLaunchStatus()
-  const openAtLogin = settings.get('openAtLogin')
-  if (openAtLogin !== currentAutostartValue) {
-    autostartManager.setAutostartEnabled(openAtLogin)
-  }
-  log.info(`Stretchly: attempting to set autostart to ${openAtLogin}`)
-
   const imagesDir = join(app.getPath('userData'), 'images')
   if (!existsSync(imagesDir)) {
     try {
@@ -300,12 +275,6 @@ async function initialize (cmd, isAppStart = true) {
     } catch (error) {
       log.error('Stretchly: error creating images directory', error)
     }
-  }
-  // Initialize portal early for Flatpak so it's ready when user opens preferences
-  if (insideFlatpak()) {
-    autostartManager.flatpakPortalManager.initialize().catch(err => {
-      log.error('Stretchly: Failed to initialize portal manager during startup:', err)
-    })
   }
 
   displayManager = new DisplayManager(settings)
@@ -1174,10 +1143,6 @@ ipcMain.on('save-setting', function (event, key, value) {
 
   if (key === 'mainColor') {
     settings.set('miniBreakColor', value)
-  }
-
-  if (key === 'openAtLogin') {
-    autostartManager.setAutostartEnabled(value)
   }
 
   if (key === 'breakHealthMode' && !value) {
