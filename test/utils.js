@@ -1,8 +1,7 @@
-import { formatTimeRemaining, formatElapsedDuration, formatTimeIn, formatKeyboardShortcut, minutesRemaining, shouldShowNotificationTitle, formatUnitAndValue } from '../app/utils/utils'
+import { formatTimeRemaining, formatElapsedDuration, formatTimeIn, formatKeyboardShortcut, minutesRemaining, formatUnitAndValue } from '../app/utils/utils'
 import { beforeAll, afterAll, vi } from 'vitest'
 import 'chai/register-should'
 import i18next from 'i18next'
-import semver from 'semver'
 import { join } from 'path'
 import Backend from 'i18next-fs-backend'
 import humanizeDuration from 'humanize-duration'
@@ -119,19 +118,6 @@ describe('Others', () => {
     })
     it('ten minutes remaining', () => {
       minutesRemaining(600 * 1000).should.equal(10)
-    })
-  })
-
-  describe('shouldShowNotificationTitle', () => {
-    it('works for older mac', () => {
-      shouldShowNotificationTitle('darwin', '10.15.1', semver).should.equal(true)
-    })
-    it('works for new mac', () => {
-      shouldShowNotificationTitle('darwin', '10.16', semver).should.equal(false)
-      shouldShowNotificationTitle('darwin', '11.0.1', semver).should.equal(false)
-    })
-    it('works for others', () => {
-      shouldShowNotificationTitle('linux', '1.0.0', semver).should.equal(true)
     })
   })
 })

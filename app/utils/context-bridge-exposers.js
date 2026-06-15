@@ -1,4 +1,3 @@
-import semver from 'semver'
 import humanizeDuration from 'humanize-duration'
 import { contextBridge, ipcRenderer, shell } from 'electron'
 import * as utils from './utils.js'
@@ -82,9 +81,6 @@ function exposeUtils () {
     },
     formatUnitAndValue: (unit, value) => {
       return utils.formatUnitAndValue(unit, value, i18n)
-    },
-    shouldShowNotificationTitle: (platform, systemVersion) => {
-      return utils.shouldShowNotificationTitle(platform, systemVersion, semver)
     }
   })
 }

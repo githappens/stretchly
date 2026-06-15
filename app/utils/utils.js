@@ -53,19 +53,11 @@ function minutesRemaining (milliseconds) {
   return Math.round(milliseconds / 60000.0)
 }
 
-function shouldShowNotificationTitle (platform, systemVersion, semver) {
-  if (platform === 'darwin' && semver.gte(semver.coerce(systemVersion), '10.16.0')) {
-    return false
-  }
-  return true
-}
-
 export {
   formatTimeRemaining,
   formatElapsedDuration,
   formatTimeIn,
   formatUnitAndValue,
   formatKeyboardShortcut,
-  minutesRemaining,
-  shouldShowNotificationTitle
+  minutesRemaining
 }
