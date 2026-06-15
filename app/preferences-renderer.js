@@ -13,7 +13,7 @@ window.onload = async (e) => {
     document.querySelectorAll('[data-strict-mode]').forEach(element => {
       element.classList.add('hidden')
     })
-    document.querySelector('#enablePostponeLong').closest('div').style.marginBottom = '56px'
+    document.querySelector('#longBreakFor').closest('div').style.marginBottom = '56px'
   }
 
   if (settings.hidePreferencesFileLocation) {
@@ -99,8 +99,6 @@ window.onload = async (e) => {
       range.value = settings[range.name] / divisor
       const unit = output.dataset.unit
       output.innerHTML = await window.utils.formatUnitAndValue(unit, range.value)
-      document.querySelector('#longBreakEvery').closest('div').querySelector('output')
-        .innerHTML = await window.i18next.t('utils.minutes', { count: parseInt(realBreakInterval()) })
     })
     setWindowHeight()
   })
@@ -175,19 +173,13 @@ window.onload = async (e) => {
     range.value = settings[range.name] / divisor
     const unit = output.dataset.unit
     output.innerHTML = await window.utils.formatUnitAndValue(unit, range.value)
-    document.querySelector('#longBreakEvery').closest('div').querySelector('output')
-      .innerHTML = await window.i18next.t('utils.minutes', { count: parseInt(realBreakInterval()) })
     if (!eventsAttached) {
       range.onchange = async event => {
         output.innerHTML = await window.utils.formatUnitAndValue(unit, range.value)
-        document.querySelector('#longBreakEvery').closest('div').querySelector('output')
-          .innerHTML = await window.i18next.t('utils.minutes', { count: parseInt(realBreakInterval()) })
         window.settings.saveSettings(range.name, range.value * divisor)
       }
       range.oninput = async event => {
         output.innerHTML = await window.utils.formatUnitAndValue(unit, range.value)
-        document.querySelector('#longBreakEvery').closest('div').querySelector('output')
-          .innerHTML = await window.i18next.t('utils.minutes', { count: parseInt(realBreakInterval()) })
       }
     }
   })
@@ -243,11 +235,5 @@ window.onload = async (e) => {
     if (height) {
       window.stretchly.setWindowSize(bounds.width, height)
     }
-  }
-
-  function realBreakInterval () {
-    const microbreakInterval = document.querySelector('#miniBreakEvery').value * 1
-    const breakInterval = document.querySelector('#longBreakEvery').value * 1
-    return microbreakInterval * (breakInterval + 1)
   }
 }
