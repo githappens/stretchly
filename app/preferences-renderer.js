@@ -215,13 +215,6 @@ window.onload = async (e) => {
     }
   }
 
-  document.querySelector('#trayIconStyle').value = settings.trayIconStyle
-  if (!eventsAttached) {
-    document.querySelector('#trayIconStyle').onchange = (event) => {
-      window.settings.saveSettings('trayIconStyle', event.target.value)
-    }
-  }
-
   document.querySelectorAll('input[type="range"]').forEach(async range => {
     const divisor = range.dataset.divisor
     const output = range.closest('div').querySelector('output')

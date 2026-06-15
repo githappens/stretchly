@@ -20,7 +20,6 @@ import {
 } from './utils/utils.js'
 import IdeasLoader from './utils/ideasLoader.js'
 import BreaksPlanner from './breaksPlanner.js'
-import AppIcon from './utils/appIcon.js'
 import AutostartManager from './utils/autostartManager.js'
 import Command from './utils/commands.js'
 import defaultSettings from './utils/defaultSettings.js'
@@ -415,11 +414,8 @@ function closeWindows (windowArray) {
 }
 
 function windowIconPath () {
-  const params = {
-    darkMode: nativeTheme.shouldUseDarkColors
-  }
-  const windowIconFileName = new AppIcon(params).windowIconFileName
-  return join(__dirname, '/images/app-icons', windowIconFileName)
+  const darkModeString = nativeTheme.shouldUseDarkColors ? 'Dark' : ''
+  return join(__dirname, '/images/app-icons', `tray${darkModeString}.png`)
 }
 
 function startProcessWin () {

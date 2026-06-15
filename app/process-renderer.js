@@ -37,7 +37,6 @@ window.onload = async (e) => {
             __electronLog.info(`Stretchly: checking for new version (local: ${oldVersion}, remote: ${cleanVersion})`)
             if (await window.semver.valid(cleanVersion) && await window.semver.gt(cleanVersion, oldVersion)) {
               await window.global.setValue('isNewVersion', true)
-              window.stretchly.updateTray()
               if (notify) {
                 notifyNewVersion(silent)
               }
