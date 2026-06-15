@@ -4,8 +4,8 @@ import createRunOnce from './utils/runOnce.js'
 import './platform.js'
 
 window.onload = async (event) => {
-  const [idea, started, duration, strictMode, postpone,
-    postponePercent, backgroundColor, danger, breakHealthMode] = await window.breaks.sendBreakData()
+  const [idea, started, duration, strictMode,
+    backgroundColor, danger, breakHealthMode] = await window.breaks.sendBreakData()
 
   document.ondragover = event =>
     event.preventDefault()
@@ -29,8 +29,6 @@ window.onload = async (event) => {
 
   document.querySelector('#close').onclick = runOnce(() => window.breaks.finishBreak(manualAwaiting))
 
-  document.querySelector('#postpone').onclick = runOnce(() => window.breaks.postponeBreak())
-
   document.querySelector('.break-idea').innerHTML = window.breaks.sanitizeIdea(idea[0])
   document.querySelector('.break-text').innerHTML = window.breaks.sanitizeIdea(idea[1])
 
@@ -53,7 +51,6 @@ window.onload = async (event) => {
 
   const progress = document.querySelector('#progress')
   const progressTime = document.querySelector('#progress-time')
-  const postponeElement = document.querySelector('#postpone')
   const closeElement = document.querySelector('#close')
   const manualFinishElement = document.querySelector('#finish')
   document.body.classList.add(mainColor.substring(1))
@@ -79,12 +76,7 @@ window.onload = async (event) => {
     if (!manualAwaiting) {
       if (passed < duration) {
         const passedPercent = passed / duration * 100
-        if (window.utils.canPostpone(postpone, passedPercent, postponePercent)) {
-          postponeElement.classList.remove('hidden')
-        } else {
-          postponeElement.classList.add('hidden')
-        }
-        if (window.utils.canSkip(strictMode, postpone, passedPercent, postponePercent)) {
+        if (!strictMode) {
           closeElement.classList.remove('hidden')
         } else {
           closeElement.classList.add('hidden')
@@ -102,7 +94,6 @@ window.onload = async (event) => {
     manualAwaiting = true
     progress.value = 0
     progressTime.classList.remove('hidden')
-    postponeElement.classList.add('hidden')
     closeElement.classList.add('hidden')
     manualFinishElement.classList.remove('hidden')
     progressTime.innerHTML = await window.utils.formatElapsedDuration(Date.now() - started, locale)

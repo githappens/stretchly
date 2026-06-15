@@ -14,7 +14,7 @@ import Store from 'electron-store'
 import humanizeDuration from 'humanize-duration'
 
 import {
-  canPostpone, canSkip, formatTimeRemaining
+  formatTimeRemaining
 } from './utils/utils.js'
 import IdeasLoader from './utils/ideasLoader.js'
 import BreaksPlanner from './breaksPlanner.js'
@@ -155,8 +155,6 @@ async function initialize (cmd, isAppStart = true) {
   if (!breakPlanner) {
     breakPlanner = new BreaksPlanner(settings)
     breakPlanner.nextBreak()
-    breakPlanner.on('startMicrobreakNotification', () => { startMicrobreakNotification() })
-    breakPlanner.on('startBreakNotification', () => { startBreakNotification() })
     breakPlanner.on('startMicrobreak', () => { startMicrobreak() })
     breakPlanner.on('finishMicrobreak', (shouldPlaySound, shouldPlanNext) => {
       if (settings.get('miniBreakManualFinish')) {
@@ -287,18 +285,6 @@ function startProcessWin () {
   processWin.webContents.loadURL(modalPath)
 }
 
-function startMicrobreakNotification () {
-  showNotification(i18next.t('main.microbreakIn', { seconds: settings.get('microbreakNotificationInterval') / 1000 }))
-  log.info('Stretchly: showing Mini break notification')
-  breakPlanner.nextBreakAfterNotification()
-}
-
-function startBreakNotification () {
-  showNotification(i18next.t('main.breakIn', { seconds: settings.get('breakNotificationInterval') / 1000 }))
-  log.info('Stretchly: showing Long break notification')
-  breakPlanner.nextBreakAfterNotification()
-}
-
 function getBlurredBackgroundWindowOptions () {
   if (!settings.get('blurredBackground')) {
     return {}
@@ -319,13 +305,6 @@ function startMicrobreak () {
 
   const breakDuration = settings.get('microbreakDuration')
   const strictMode = settings.get('microbreakStrictMode')
-  const postponesLimit = settings.get('microbreakPostponesLimit')
-  const postponableDurationPercent = settings.get('microbreakPostponableDurationPercent')
-  // In manual/idle mode (both break types off) breaks are CLI-triggered one-offs;
-  // postponing (which reschedules) makes no sense, so offer skip instead.
-  const manualMode = !settings.get('microbreak') && !settings.get('break')
-  const postponable = !manualMode && !quitAfterBreak && settings.get('microbreakPostpone') &&
-    breakPlanner.postponesNumber < postponesLimit && postponesLimit > 0
   const showBreaksAsRegularWindows = settings.get('showBreaksAsRegularWindows')
 
   // Swallow Cmd+Tab (macOS) so the break can't be escaped by switching apps.
@@ -356,16 +335,13 @@ function startMicrobreak () {
           finishMicrobreak(false)
           return
         }
-        if (canPostpone(postponable, passedPercent, postponableDurationPercent)) {
-          postponeMicrobreak()
-        } else if (canSkip(strictMode, postponable, passedPercent, postponableDurationPercent)) {
+        if (!strictMode) {
           increaseDanger(1)
           finishMicrobreak(false)
         }
       })
     }
     return [idea, startTime, breakDuration, strictMode,
-      postponable, postponableDurationPercent,
       calculateBackgroundColor(settings.get('miniBreakColor')), danger, settings.get('breakHealthMode')]
   })
 
@@ -480,13 +456,6 @@ function startBreak () {
 
   const breakDuration = settings.get('breakDuration')
   const strictMode = settings.get('breakStrictMode')
-  const postponesLimit = settings.get('breakPostponesLimit')
-  const postponableDurationPercent = settings.get('breakPostponableDurationPercent')
-  // In manual/idle mode (both break types off) breaks are CLI-triggered one-offs;
-  // postponing (which reschedules) makes no sense, so offer skip instead.
-  const manualMode = !settings.get('microbreak') && !settings.get('break')
-  const postponable = !manualMode && !quitAfterBreak && settings.get('breakPostpone') &&
-    breakPlanner.postponesNumber < postponesLimit && postponesLimit > 0
   const showBreaksAsRegularWindows = settings.get('showBreaksAsRegularWindows')
 
   // Swallow Cmd+Tab (macOS) so the break can't be escaped by switching apps.
@@ -518,16 +487,13 @@ function startBreak () {
           finishBreak(false)
           return
         }
-        if (canPostpone(postponable, passedPercent, postponableDurationPercent)) {
-          postponeBreak()
-        } else if (canSkip(strictMode, postponable, passedPercent, postponableDurationPercent)) {
+        if (!strictMode) {
           increaseDanger(2)
           finishBreak(false)
         }
       })
     }
     return [idea, startTime, breakDuration, strictMode,
-      postponable, postponableDurationPercent,
       calculateBackgroundColor(settings.get('mainColor')), danger, settings.get('breakHealthMode')]
   })
 
@@ -712,20 +678,6 @@ function finishBreak (shouldPlaySound = true, shouldPlanNext = true) {
   if (quitAfterBreak) app.quit()
 }
 
-function postponeMicrobreak () {
-  increaseDanger(1)
-  microbreakWins = breakComplete(false, microbreakWins, 'mini')
-  breakPlanner.postponeCurrentBreak()
-  log.info('Stretchly: postponing Mini break')
-}
-
-function postponeBreak () {
-  increaseDanger(1)
-  breakWins = breakComplete(false, breakWins, 'long')
-  breakPlanner.postponeCurrentBreak()
-  log.info('Stretchly: postponing Long break')
-}
-
 function skipToMicrobreak (delay) {
   if (microbreakWins) {
     increaseDanger(1)
@@ -833,23 +785,6 @@ function createPreferencesWindow () {
   })
 }
 
-function showNotification (text) {
-  processWin.webContents.send('show-notification',
-    text,
-    settings.get('silentNotifications')
-  )
-}
-
-ipcMain.on('postpone-mini-break', function (event) {
-  log.info('Stretchly: postpone button clicked during Mini break')
-  postponeMicrobreak()
-})
-
-ipcMain.on('postpone-long-break', function (event) {
-  log.info('Stretchly: postpone button clicked during Long break')
-  postponeBreak()
-})
-
 ipcMain.on('finish-mini-break', function (event, shouldPlaySound, manualAwaiting) {
   log.info(`Stretchly: finish button clicked during Mini break (manualAwaiting: ${manualAwaiting})`)
   if (manualAwaiting) {
@@ -889,16 +824,6 @@ ipcMain.on('save-setting', function (event, key, value) {
   }
 
   settings.set(key, value)
-
-  // Enabling/disabling a break type changes what should be scheduled, so
-  // re-plan immediately instead of waiting for the current cycle to finish.
-  // When both types are now disabled this drops the planner into idle.
-  // Skip while mid-break so we don't cancel an active break.
-  if ((key === 'microbreak' || key === 'break') &&
-      breakPlanner.scheduler.reference !== 'finishMicrobreak' &&
-      breakPlanner.scheduler.reference !== 'finishBreak') {
-    breakPlanner.nextBreak()
-  }
 })
 
 ipcMain.on('restore-defaults', (event) => {

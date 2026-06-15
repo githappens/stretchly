@@ -1,4 +1,4 @@
-import { formatTimeRemaining, formatElapsedDuration, formatTimeIn, canSkip, canPostpone, formatKeyboardShortcut, minutesRemaining, shouldShowNotificationTitle, formatUnitAndValue } from '../app/utils/utils'
+import { formatTimeRemaining, formatElapsedDuration, formatTimeIn, formatKeyboardShortcut, minutesRemaining, shouldShowNotificationTitle, formatUnitAndValue } from '../app/utils/utils'
 import { beforeAll, afterAll, vi } from 'vitest'
 import 'chai/register-should'
 import i18next from 'i18next'
@@ -96,50 +96,6 @@ describe('Others', () => {
 
   afterAll(() => {
     vi.useRealTimers()
-  })
-
-  describe('canSkip', () => {
-    // strictMode, postpone, passedPercent, postponePercent
-    it('is false when in strict mode I', () => {
-      canSkip(true, true, 20, 30).should.equal(false)
-    })
-    it('is false when in strict mode II', () => {
-      canSkip(true, true, 40, 30).should.equal(false)
-    })
-    it('is false when in strict mode III', () => {
-      canSkip(true, false, 20, 30).should.equal(false)
-    })
-    it('is false when in strict mode IV', () => {
-      canSkip(true, false, 40, 30).should.equal(false)
-    })
-    it('is true when not in strict mode and after postpone percent', () => {
-      canSkip(false, true, 40, 30).should.equal(true)
-    })
-    it('is false when not in strict mode and before postpone percent', () => {
-      canSkip(false, true, 20, 30).should.equal(false)
-    })
-    it('is true when not in strict mode I', () => {
-      canSkip(false, false, 40, 30).should.equal(true)
-    })
-    it('is true when not in strict mode II', () => {
-      canSkip(false, false, 20, 30).should.equal(true)
-    })
-  })
-
-  describe('canPostpone', () => {
-    // postpone, passedPercent, postponePercent
-    it('is true when postpone and before postpone percent', () => {
-      canPostpone(true, 20, 30).should.equal(true)
-    })
-    it('is false when postpone and after postpone percent', () => {
-      canPostpone(true, 40, 30).should.equal(false)
-    })
-    it('is false when not postpone I', () => {
-      canPostpone(false, 20, 30).should.equal(false)
-    })
-    it('is false when not postpone II', () => {
-      canPostpone(false, 40, 30).should.equal(false)
-    })
   })
 
   describe('formatKeyboardShortcut', () => {

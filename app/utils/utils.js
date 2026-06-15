@@ -45,16 +45,6 @@ function formatUnitAndValue (unit, value, i18next) {
   }
 }
 
-// does not consider `postponesLimit`
-function canPostpone (postpone, passedPercent, postponePercent) {
-  return postpone && passedPercent <= postponePercent
-}
-
-// does not consider `postponesLimit`
-function canSkip (strictMode, postpone, passedPercent, postponePercent) {
-  return !((postpone && passedPercent <= postponePercent) || strictMode)
-}
-
 function formatKeyboardShortcut (keyboardShortcut) {
   return keyboardShortcut.replace('Or', '/').replace('+', ' + ')
 }
@@ -78,8 +68,6 @@ export {
   formatElapsedDuration,
   formatTimeIn,
   formatUnitAndValue,
-  canPostpone,
-  canSkip,
   formatKeyboardShortcut,
   minutesRemaining,
   shouldShowNotificationTitle
