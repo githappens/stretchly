@@ -60,8 +60,6 @@ process.on('uncaughtException', (err, _) => {
   })
 })
 
-nativeTheme.on('updated', function theThemeHasChanged () {})
-
 let microbreakIdeas
 let breakIdeas
 let breakPlanner
@@ -641,7 +639,7 @@ function startMicrobreak () {
   // In manual/idle mode (both break types off) breaks are CLI-triggered one-offs;
   // postponing (which reschedules) makes no sense, so offer skip instead.
   const manualMode = !settings.get('microbreak') && !settings.get('break')
-  const postponable = !manualMode && settings.get('microbreakPostpone') &&
+  const postponable = !manualMode && !quitAfterBreak && settings.get('microbreakPostpone') &&
     breakPlanner.postponesNumber < postponesLimit && postponesLimit > 0
   const showBreaksAsRegularWindows = settings.get('showBreaksAsRegularWindows')
 
@@ -815,7 +813,7 @@ function startBreak () {
   // In manual/idle mode (both break types off) breaks are CLI-triggered one-offs;
   // postponing (which reschedules) makes no sense, so offer skip instead.
   const manualMode = !settings.get('microbreak') && !settings.get('break')
-  const postponable = !manualMode && settings.get('breakPostpone') &&
+  const postponable = !manualMode && !quitAfterBreak && settings.get('breakPostpone') &&
     breakPlanner.postponesNumber < postponesLimit && postponesLimit > 0
   const showBreaksAsRegularWindows = settings.get('showBreaksAsRegularWindows')
 
